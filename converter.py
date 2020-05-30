@@ -107,10 +107,10 @@ if __name__ == "__main__":
         #     target = data['-t']
         else:
             file_path = sys.argv[1]
-        target=data.get('-t', 'moby') 
+        target = data.get('-t', 'moby') 
         category = data.get('-cat', 'ebook')
-        print(file_path, target, category)
-        # main(file_path, target)
+        # print(file_path, target, category)
+        main(file_path, target, category)
 
 
 
