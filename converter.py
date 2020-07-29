@@ -33,7 +33,6 @@ def send_job(data, api_key):
     response = requests.post(url, headers=headers, data=data)
     id = response.json()['id']
     print('id: ', id)
-    # server = response.json()['server']
     return response
 
 def send_file(id, server, file_path, api_key):
@@ -64,10 +63,12 @@ def get_status(id):
 
 def main(file_path, target="mobi", category="ebook", api_key=api_key):
     data = set_data(target, category) 
+    print(data)
     res_send = send_job(data, api_key)
+    print(res_send)
     id = res_send.json()['id']
     server = res_send.json()['server']
-    res_put = send_file(id, server, file_path)
+    res_put = send_file(id, server, file_path, api_key)
     while True:
         res_st = get_status(id)
         status = res_st.json()['status']['code']
@@ -107,9 +108,9 @@ if __name__ == "__main__":
         #     target = data['-t']
         else:
             file_path = sys.argv[1]
-        target = data.get('-t', 'moby') 
+        target = data.get('-t', 'mobi') 
         category = data.get('-cat', 'ebook')
-        # print(file_path, target, category)
+        print(file_path, target, category)
         main(file_path, target, category)
 
 
