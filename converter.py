@@ -1,117 +1,161 @@
+'''
+The application works with remote converter API.
+Converts electronic books from fb2 format to mobi by default
+Needs to ser enviroment data API_KEY and CONVERTER_URL
+'''
 import json
 import sys
 import os
-import requests
 import time
+import requests
+
 from utils import get_path, parse_command, save_from_url
 
-api_key = 'c6978d7a29f5d34b0cb9597f322528d6'
-url ='https://api2.online-convert.com/jobs'
 
-###############
+API_KEY = os.environ.get('API_KEY') or 'c6978d7a29f5d34b0cb9597f322528d6'
+URL = os.environ.get('CONVERTER_URL') or 'https://api2.online-convert.com/jobs'
+
+DOCSTRING = """
+command needs:
+-path - full/path/to/file
+or
+-name - file_name in current directory
+and
+-t - [target] - string of file format(default "mobi")
+-cat - [category] - category of formatting file (default "ebook")
+"""
+
 # test data:
-headers = {
+
+HEADERS = {
     'cache-control': 'no-cache',
     'content-type': 'application/json',
-    'x-oc-api-key': api_key
+    'x-oc-api-key': API_KEY
     }
-data_test = '{\n"conversion": [{\n"category": "ebook",\n"target": "mobi"\n}]\n}'
-data_test1 = {'conversion': [{'category': 'ebook', 'target': 'mobi'}]}
-###############
+DATA_TEST = '{\n"conversion":\
+        [{\n"category": "ebook",\n"target": "mobi"\n}]\n}'
+DATA_TEST1 = {'conversion': [{'category': 'ebook', 'target': 'mobi'}]}
 
-def set_data(target, category):
+
+def set_data_options(target: str, category: str) -> str:
+    '''
+    creates json string with parameters to converts files
+    target: string e-book extension(mobi by default)
+    category: string of category converter(e-book by default)
+    returns string with parameters
+    '''
+
     data = {'conversion': [{'category': category, 'target': target}]}
     return json.dumps(data)
 
-def send_job(data, api_key):
-    headers = {
+
+def send_job_to_server(data: str):
+    '''
+    sends request to create remote job
+    data: json string with parameters target and category
+    returns response object and stirng with job id
+    '''
+
+    try:
+        response = requests.post(URL, headers=HEADERS, data=data)
+    except Exception:
+        print('job not registrate on server')
+
+    try:
+        work_id = response.json()['id']
+        server = response.json()['server']
+    except KeyError:
+        print(response.json())
+        exit()
+    print('id: ', work_id)
+    print('server: ', server)
+    return server, work_id
+
+
+def send_file_to_server(
+        work_id: str, server: str, file_path: str):
+    '''
+    sends request to remote API with opened file object
+    work_id: string with unique id from remote API
+    server: string with special URL of working server
+    file_path: string with path to file then needs uploads to server
+    returns http response object
+    '''
+
+    head = {
         'cache-control': 'no-cache',
-        'content-type': 'application/json',
-        'x-oc-api-key': api_key
+        'x-oc-api-key': API_KEY
         }
 
-    response = requests.post(url, headers=headers, data=data)
-    id = response.json()['id']
-    print('id: ', id)
-    return response
 
-def send_file(id, server, file_path, api_key):
-    headers = {
-        'cache-control': 'no-cache',
-        'x-oc-api-key': api_key
-    }
+    try:
+        files = {'file': (file_path, open(file_path, 'rb'))}
+    except FileNotFoundError:
+        print('file not found')
+        exit()
+    url_upload = f'{server}/upload-file/{work_id}'
+    try:
+        response = requests.post(url_upload, headers=head, files=files)
+    except Exception:
+        print('file not sended to server')
+    completed = response.json().get('completed')
+    if completed:
+        print('file send completed')
+    else:
+        print(response.json())
 
-    files = {
-        'file': (file_path, open(file_path, 'rb'))
-    }
-    url_upload = f'{server}/upload-file/{id}'
-    response = requests.post(url_upload, headers=headers, files=files)
-    completed = response.json()['completed']
-    if completed: print('file send completed')
-    return response
 
-def get_status(id):
-    headers = {
-        'cache-control': 'no-cache',
-        'x-oc-api-key': api_key 
-    }
-    response = requests.get(url+f'/{id}', headers=headers)
+def get_status_convert_file(work_id: str):
+    '''
+    sends requet to server with unique id and return response with
+    status code
+    '''
+
+    try:
+        response = requests.get(URL+f'/{work_id}', headers=HEADERS)
+    except Exception:
+        print('file not have status')
     status_code = response.json()['status']['code']
     print(status_code)
-    # uri  = response.json()['output'][0]['uri']
-    return response
+    return response, status_code
 
-def main(file_path, target="mobi", category="ebook", api_key=api_key):
-    data = set_data(target, category) 
-    print(data)
-    res_send = send_job(data, api_key)
-    print(res_send)
-    id = res_send.json()['id']
-    server = res_send.json()['server']
-    res_put = send_file(id, server, file_path, api_key)
+
+def main(file_path, target="mobi", category="ebook"):
+    '''
+    main function create all resquests to remote server
+    and save converted file to local directory
+    '''
+
+    data = set_data_options(target, category)
+    server, work_id = send_job_to_server(data)
+    send_file_to_server(work_id, server, file_path)
     while True:
-        res_st = get_status(id)
-        status = res_st.json()['status']['code']
-        if status == 'completed': break
         time.sleep(3)
-    uri = res_st.json()['output'][0]['uri']
-    save_from_url(uri)
-
-def get_value(arg):
-    indx = sys.argv.index(arg)
-    try:
-        res = sys.argv[indx+1]
-    except IndexError:
-        print('not found value')
-    return res
+        res_status, status = get_status_convert_file(work_id)
+        if status == 'completed':
+            uri_to_downloas_file = res_status.json()['output'][0]['uri']
+            save_from_url(uri_to_downloas_file)
+            break
+        elif status == 'incomplete':
+            print('missing information to run a job')
+            break
+        elif status == 'failed':
+            print(res_status.json()['status']['info'])
+            break
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        docstring = """
-            command needs:
-            -path - full/path/to/file
-            or
-            -name - file_name in current directory
-            and
-            -t - [target] - string of file format(default "mobi")
-            -cat - [category] - category of formatting file (default "ebook")
-            """
-        print(docstring)
+        print(DOCSTRING)
     else:
-        data = parse_command()
-        if data.get('-path'): 
-            file_path = data[ '-path' ]
-        elif data.get('-name'): 
-            file_path = get_path(data[ '-name' ])
-        # elif data.get('-t'): 
-        #     target = data['-t']
+        data_settings = parse_command()
+        if data_settings.get('-path'):
+            working_file_path = data_settings['-path']
+        elif data_settings.get('-name'):
+            working_file_path = get_path(data_settings['-name'])
         else:
-            file_path = sys.argv[1]
-        target = data.get('-t', 'mobi') 
-        category = data.get('-cat', 'ebook')
-        print(file_path, target, category)
-        main(file_path, target, category)
-
-
-
+            working_file_path = sys.argv[1]
+        working_target = data_settings.get('-t', 'mobi')
+        working_category = data_settings.get('-cat', 'ebook')
+        print(working_file_path, working_target, working_category)
+        main(working_file_path, working_target, working_category)
