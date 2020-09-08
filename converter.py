@@ -9,7 +9,7 @@ import os
 import time
 import requests
 
-from utils import get_path, parse_command, save_from_url
+from utils import get_path, parse_command, save_from_url, catcher
 
 
 API_KEY = os.environ.get('API_KEY') or 'c6978d7a29f5d34b0cb9597f322528d6'
@@ -37,7 +37,7 @@ DATA_TEST = '{\n"conversion":\
 DATA_TEST1 = {'conversion': [{'category': 'ebook', 'target': 'mobi'}]}
 
 
-def set_data_options(target: str, category: str) -> str:
+def _set_data_options(target: str, category: str) -> str:
     '''
     creates json string with parameters to converts files
     target: string e-book extension(mobi by default)
@@ -49,31 +49,26 @@ def set_data_options(target: str, category: str) -> str:
     return json.dumps(data)
 
 
-def send_job_to_server(data: str):
+def _send_job_to_server(data: str):
     '''
     sends request to create remote job
     data: json string with parameters target and category
     returns response object and stirng with job id
     '''
 
-    try:
-        response = requests.post(URL, headers=HEADERS, data=data)
-    except Exception:
-        print('job not registrate on server')
-
+    response = requests.post(URL, headers=HEADERS, data=data)
     try:
         work_id = response.json()['id']
         server = response.json()['server']
     except KeyError:
         print(response.json())
-        exit()
-    print('id: ', work_id)
-    print('server: ', server)
-    return server, work_id
+    else:
+        print('id: ', work_id)
+        # print('server: ', server) if needs more information
+        return server, work_id
 
 
-def send_file_to_server(
-        work_id: str, server: str, file_path: str):
+def _send_file_to_server(work_id: str, server: str, file_path: str):
     '''
     sends request to remote API with opened file object
     work_id: string with unique id from remote API
@@ -87,51 +82,48 @@ def send_file_to_server(
         'x-oc-api-key': API_KEY
         }
 
-
     try:
         files = {'file': (file_path, open(file_path, 'rb'))}
     except FileNotFoundError:
         print('file not found')
-        exit()
-    url_upload = f'{server}/upload-file/{work_id}'
-    try:
-        response = requests.post(url_upload, headers=head, files=files)
-    except Exception:
-        print('file not sended to server')
-    completed = response.json().get('completed')
-    if completed:
-        print('file send completed')
     else:
-        print(response.json())
+        url_upload = f'{server}/upload-file/{work_id}'
+        response = requests.post(url_upload, headers=head, files=files)
+        completed = response.json().get('completed')
+        if completed:
+            print('file send completed')
+        else:
+            print(response.json())
 
 
-def get_status_convert_file(work_id: str):
+def _get_status_convert_file(work_id: str):
     '''
     sends requet to server with unique id and return response with
     status code
     '''
 
-    try:
-        response = requests.get(URL+f'/{work_id}', headers=HEADERS)
-    except Exception:
-        print('file not have status')
+    response = requests.get(URL+f'/{work_id}', headers=HEADERS)
+
     status_code = response.json()['status']['code']
     print(status_code)
     return response, status_code
 
 
+@catcher
 def main(file_path, target="mobi", category="ebook"):
     '''
     main function create all resquests to remote server
     and save converted file to local directory
     '''
 
-    data = set_data_options(target, category)
-    server, work_id = send_job_to_server(data)
-    send_file_to_server(work_id, server, file_path)
+    if not os.path.isfile(file_path):
+        raise ValueError('invalid file path')
+    data = _set_data_options(target, category)
+    server, work_id = _send_job_to_server(data)
+    _send_file_to_server(work_id, server, file_path)
     while True:
         time.sleep(3)
-        res_status, status = get_status_convert_file(work_id)
+        res_status, status = _get_status_convert_file(work_id)
         if status == 'completed':
             uri_to_downloas_file = res_status.json()['output'][0]['uri']
             save_from_url(uri_to_downloas_file)

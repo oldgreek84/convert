@@ -25,8 +25,9 @@ def catcher(func):
         try:
             func(*args, **kwargs)
         except Exception as e:
-            return {'status': 'error',
-                    'message': e.args}
+            print ({'status': 'error',
+                    'message': e.args[-1]})
+            exit()
     return wrapper
 
 
