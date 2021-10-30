@@ -1,8 +1,11 @@
-'''
+#!/usr/bin/env python3
+
+"""
 The application works with remote converter API.
 Converts electronic books from fb2 format to mobi by default
 Needs to ser enviroment data API_KEY and CONVERTER_URL
-'''
+"""
+
 import json
 import sys
 import os
@@ -18,9 +21,7 @@ URL = os.environ.get('CONVERTER_URL') or 'https://api2.online-convert.com/jobs'
 DOCSTRING = """
 command needs:
 -path - full/path/to/file
-or
 -name - file_name in current directory
-and
 -t - [target] - string of file format(default "mobi")
 -cat - [category] - category of formatting file (default "ebook")
 """
@@ -31,7 +32,7 @@ HEADERS = {
     'cache-control': 'no-cache',
     'content-type': 'application/json',
     'x-oc-api-key': API_KEY
-    }
+}
 DATA_TEST = '{\n"conversion":\
         [{\n"category": "ebook",\n"target": "mobi"\n}]\n}'
 DATA_TEST1 = {'conversion': [{'category': 'ebook', 'target': 'mobi'}]}
@@ -80,7 +81,7 @@ def _send_file_to_server(work_id: str, server: str, file_path: str):
     head = {
         'cache-control': 'no-cache',
         'x-oc-api-key': API_KEY
-        }
+    }
 
     try:
         files = {'file': (file_path, open(file_path, 'rb'))}
@@ -102,7 +103,7 @@ def _get_status_convert_file(work_id: str):
     status code
     '''
 
-    response = requests.get(URL+f'/{work_id}', headers=HEADERS)
+    response = requests.get(f"{URL}/{work_id}", headers=HEADERS)
 
     status_code = response.json()['status']['code']
     print(status_code)
