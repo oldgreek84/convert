@@ -26,16 +26,11 @@ command needs:
 -cat - [category] - category of formatting file (default "ebook")
 """
 
-# test data:
-
 HEADERS = {
     'cache-control': 'no-cache',
     'content-type': 'application/json',
     'x-oc-api-key': API_KEY
 }
-DATA_TEST = '{\n"conversion":\
-        [{\n"category": "ebook",\n"target": "mobi"\n}]\n}'
-DATA_TEST1 = {'conversion': [{'category': 'ebook', 'target': 'mobi'}]}
 
 
 def _set_data_options(target: str, category: str) -> str:
@@ -99,7 +94,7 @@ def _send_file_to_server(work_id: str, server: str, file_path: str):
 
 def _get_status_convert_file(work_id: str):
     '''
-    sends requet to server with unique id and return response with
+    sends request to server with unique id and return response with
     status code
     '''
 
@@ -111,29 +106,30 @@ def _get_status_convert_file(work_id: str):
 
 
 @catcher
-def main(file_path, target="mobi", category="ebook"):
+def main(path_to_file, path_to_save='books', target="mobi", category="ebook"):
     '''
     main function create all resquests to remote server
     and save converted file to local directory
     '''
 
-    if not os.path.isfile(file_path):
+    if not os.path.isfile(path_to_file):
         raise ValueError('invalid file path')
+
     data = _set_data_options(target, category)
     server, work_id = _send_job_to_server(data)
-    _send_file_to_server(work_id, server, file_path)
+    _send_file_to_server(work_id, server, path_to_file)
+
     while True:
         time.sleep(3)
         res_status, status = _get_status_convert_file(work_id)
-        if status == 'completed':
-            uri_to_downloas_file = res_status.json()['output'][0]['uri']
-            save_from_url(uri_to_downloas_file)
-            break
-        elif status == 'incomplete':
-            print('missing information to run a job')
-            break
-        elif status == 'failed':
-            print(res_status.json()['status']['info'])
+        if status != 'processing':
+            if status == 'completed':
+                uri_to_downloas_file = res_status.json()['output'][0]['uri']
+                save_from_url(uri_to_downloas_file, path_to_save)
+            elif status == 'incomplete':
+                print('missing information to run a job')
+            elif status == 'failed':
+                print(res_status.json()['status']['info'])
             break
 
 
@@ -148,7 +144,10 @@ if __name__ == "__main__":
             working_file_path = get_path(data_settings['-name'])
         else:
             working_file_path = sys.argv[1]
+
         working_target = data_settings.get('-t', 'mobi')
         working_category = data_settings.get('-cat', 'ebook')
+
         print(working_file_path, working_target, working_category)
-        main(working_file_path, working_target, working_category)
+
+        main(working_file_path, target=working_target, category=working_category)

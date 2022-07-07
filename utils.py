@@ -3,46 +3,38 @@
 
 import os
 import sys
+from typing import Callable
+from functools import wraps
 import requests
 
-from functools import wraps
-import traceback
 
-
-test_id = '1d3a0ff8-2ba0-497b-8be0-0a509be94adb'
-server ='https://www13.online-convert.com/dl/web8'
-path = '/home/doc/oskar_i_rojeva_pani.fb2'
-
-
-def catcher(func):
+def catcher(func: Callable):
     '''
-    decorator catch all exception in funtion and
+    decorator catch all exception in function and
     retun message with errors
     '''
 
-    wraps(func)
+    @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             func(*args, **kwargs)
-        except Exception as e:
-            print ({'status': 'error',
-                    'message': e.args[-1]})
-            exit()
+        except Exception as ex:
+            print({'status': 'error', 'message': ex.args[-1]})
     return wrapper
 
 
-def get_value(arg):
+def get_value(arg: str) -> str:
     ''' gets and returns next argument for command line '''
 
     indx = sys.argv.index(arg)
     try:
-        res = sys.argv[indx+1]
+        res = sys.argv[indx + 1]
     except IndexError:
         print('not found value')
     return res
 
 
-def get_path(file_name):
+def get_path(file_name: str) -> str:
     ''' returns path of file if then exists or raise exception '''
 
     files = [x.name for x in os.scandir(os.path.curdir) if x.is_file()]
@@ -55,7 +47,7 @@ def get_path(file_name):
     return path_file
 
 
-def parse_command():
+def parse_command() -> dict:
     ''' return dict with arguments of command line '''
 
     data = {}
@@ -66,20 +58,33 @@ def parse_command():
     return data
 
 
-def save_from_url(url, bufsize=1024):
-    ''' saves file form remote URL to current working directory '''
+def save_from_url(url: str, sub_dir: str = os.path.curdir):
+    """saves file form remote URL to directory"""
 
-    path = os.path.abspath(os.path.curdir)
     filename = url.split('/')[-1]
-    file_path = os.path.join(path, filename)
+    full_path = get_full_file_path(filename, sub_dir)
     response = requests.get(url, stream=True)
-    with open(file_path, 'wb') as f:
+    save_file_to_dir(full_path, response)
+    print(f'[file save to {full_path}]')
+
+
+def get_full_file_path(filename: str, sub_dir: str) -> str:
+    """return full file path"""
+
+    main_path = os.path.abspath(sub_dir)
+    if not os.path.exists(main_path):
+        os.mkdir(main_path)
+    return os.path.join(main_path, filename)
+
+
+def save_file_to_dir(file_path: str, response: requests.Response, bufsize: int = 1024):
+    """save file from response object to dir"""
+
+    with open(file_path, 'wb') as opened_file:
         print('writing file...')
-        for path in response.iter_content(bufsize):
-            if path:
-                f.write(path)
+        for part in response.iter_content(bufsize):
+            opened_file.write(part)
     print('[ end writing ]')
-    print(f'[file save to {file_path}]')
 
 
 if __name__ == "__main__":
@@ -88,3 +93,6 @@ if __name__ == "__main__":
         print(get_path(test_file_name))
     else:
         print(get_path(__file__))
+
+    resp = requests.get('http://www.google.com')
+    save_file_to_dir(get_full_file_path('some.txt', 'book'), resp)
