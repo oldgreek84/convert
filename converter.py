@@ -119,18 +119,20 @@ def main(path_to_file, path_to_save='books', target="mobi", category="ebook"):
     server, work_id = _send_job_to_server(data)
     _send_file_to_server(work_id, server, path_to_file)
 
+    res_status, status = False, False
     while True:
         time.sleep(3)
         res_status, status = _get_status_convert_file(work_id)
         if status != 'processing':
-            if status == 'completed':
-                uri_to_downloas_file = res_status.json()['output'][0]['uri']
-                save_from_url(uri_to_downloas_file, path_to_save)
-            elif status == 'incomplete':
-                print('missing information to run a job')
-            elif status == 'failed':
-                print(res_status.json()['status']['info'])
             break
+
+    if status == 'completed':
+        uri_to_downloas_file = res_status.json()['output'][0]['uri']
+        save_from_url(uri_to_downloas_file, path_to_save)
+    elif status == 'incomplete':
+        print('missing information to run a job')
+    elif status == 'failed':
+        print(res_status.json()['status']['info'])
 
 
 if __name__ == "__main__":
