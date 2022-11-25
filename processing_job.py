@@ -1,65 +1,63 @@
 import os
 import json
 import time
-from typing import Protocol, Tuple
-from dataclasses import dataclass
+from typing import Tuple
+from abc import abstractmethod, ABC
 import requests
 
 from utils import get_full_file_path
+from config import JobConfig, ConverterConfig
 
 
-@dataclass
-class Target:
-    target: str = "mobi"
-    category: str = "ebook"
+class JobProcessor(ABC):
+    def __init__(self, *args, **kwargs):
+        pass
 
+    @abstractmethod
+    def send_job_data(self) -> str:
+        """send job data for processing. Return job ID"""
 
-@dataclass
-class JobConfig:
-    target: Target
-    path_to_file: str
-    path_to_save: str
-
-
-class JobProcessor(Protocol):
-    def send_job_data(self):
-        """send job data for processing"""
-
-    def get_job_data(self):
+    @abstractmethod
+    def get_job_data(self, job_id: str) -> str:
         """get job data after processing"""
 
+    @abstractmethod
+    def convert(self) -> str:
+        """converts the data to needed format. Save result"""
 
-class ConverterConfig:
-    """Docstring for UrlConverter:."""
-
-    def __init__(self, api_key: str, api_url: str):
-        """TODO: to be defined."""
-        self.api_key = api_key
-        self.api_url = api_url
-        self.headers = {
-            "main_header": {
-                "cache-control": "no-cache",
-                "content-type": "application/json",
-                "x-oc-api-key": self.api_key,
-            },
-            "cache_header": {
-                "cache-control": "no-cache", "x-oc-api-key": self.api_key},
-        }
-
-    def get_header(self, header_key: str):
-        return self.headers[header_key]
-
-    def set_header(self, key: str, data: dict):
-        self.headers[key] = data
+    @abstractmethod
+    def save_file(self, path_to_save: str, *args) -> str:
+        """save result and return path to result"""
 
 
-class JobProcessorRemote:
-    def __init__(
-            self, job_config: JobConfig,
-            target: Target, converter_config: ConverterConfig):
+class JobProcessorDummy(JobProcessor):
+    def __init__(self, job_config, *args, **kwargs):
         self.job_config = job_config
-        self.target = target
+        super().__init__(*args, **kwargs)
+
+    def send_job_data(self):
+        print("Data was sent")
+        return "test id"
+
+    def get_job_data(self, job_id: str):
+        print("Data was got")
+
+    def convert(self):
+        print("Data was converted")
+
+    def save_file(self, path_to_save, *args):
+        print("file was saved")
+        return "path/to/file"
+
+
+class JobProcessorRemote(JobProcessor):
+    def __init__(
+            self,
+            job_config: JobConfig,
+            converter_config: ConverterConfig):
+        self.job_config = job_config
         self.converter_config = converter_config
+        self._data = None
 
     def send_job_data(self) -> str:
         option_data = self._set_data_options()
@@ -71,11 +69,36 @@ class JobProcessorRemote:
             self._send_file_to_server(url_upload, file_data)
         return work_id
 
+    def get_job_data(self, job_id: str) -> dict:
+        status = self.get_job_status(job_id)
+        if error := status.get("error"):
+            raise ValueError(error)
+        return status.get("result")
+
+    def convert(self):
+        """
+        main function create all resquests to remote server
+        and save converted file to local directory
+        """
+
+        self.validate_path()
+        work_id = self.send_job_data()
+
+        uri_to_downloas_file = self.get_job_data(work_id)
+        return self.save_file(self.job_config.path_to_save, uri_to_downloas_file)
+
+    # TODO: create PATH saver class
+    def save_file(self, path_to_save: str, uri_to_downloas_file: str):
+        return self._save_from_url(uri_to_downloas_file, path_to_save)
+
     def _set_data_options(self) -> str:
         """return jsonify convert options"""
         data = {
             "conversion": [
-                {"category": self.target.category, "target": self.target.target}
+                {
+                    "category": self.job_config.target.category,
+                    "target": self.job_config.target.target
+                }
             ]
         }
         return json.dumps(data)
@@ -109,24 +132,6 @@ class JobProcessorRemote:
         server = response.json()["server"]
         return server, work_id
 
-    def convert(self):
-        """
-        main function create all resquests to remote server
-        and save converted file to local directory
-        """
-
-        self.validate_path()
-        work_id = self.send_job_data()
-
-        uri_to_downloas_file = self.get_job_data(work_id)
-        self.save_from_url(uri_to_downloas_file, self.job_config.path_to_save)
-
-    def get_job_data(self, work_id: str) -> dict:
-        status = self.get_job_status(work_id)
-        if error := status.get("error"):
-            raise ValueError(error)
-        return status.get("result")
-
     def get_job_status(self, work_id: str):
         res_status, status = False, False
         while True:
@@ -157,7 +162,7 @@ class JobProcessorRemote:
         status_code = response.json()["status"]["code"]
         return response, status_code
 
-    def save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> str:
+    def _save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> str:
         """saves file form remote URL to directory"""
 
         filename = url.split("/")[-1]

@@ -1,32 +1,21 @@
-from abc import ABC, abstractmethod
-
-# import json
-
-import sys
 import os
+import sys
 
-# import time
-# from dataclasses import dataclass
-# import requests
+from abc import ABC, abstractmethod
 
 from dotenv import load_dotenv
 
 from utils import parse_command, get_path
+from config import Target
 from processing_job import (
     JobProcessor,
     JobProcessorRemote,
+    JobProcessorDummy,
     JobConfig,
     ConverterConfig,
-    Target,
 )
 
 load_dotenv()
-
-HEADERS = {
-    "cache-control": "no-cache",
-    "content-type": "application/json",
-    # "x-oc-api-key": API_KEY,
-}
 
 DOCSTRING = """
 command needs:
@@ -51,36 +40,27 @@ class ConverterInterface(ABC):
         pass
 
 
-class ConverterInterfaceCLI(ConverterInterface):
+class ConverterInterfaceCLI:
     def __init__(self, job_processor: JobProcessor):
         self.job_processor = job_processor
 
-    def send_job(self):
-        return self.job_processor.send_job_data()
-
-    def get_job(self, work_id: str):
-        return self.job_processor.get_job_data(work_id)
-
     def convert(self):
-        self.job_processor.validate_path()
-        work_id = self.send_job()
+        work_id = self.job_processor.send_job_data()
         print("file was sent")
         print(f"work ID: {work_id}")
-        uri_to_downloas_file = self.get_job(work_id)
-        print(uri_to_downloas_file)
-        full_path = self.job_processor.save_from_url(
-            uri_to_downloas_file, self.job_processor.job_config.path_to_save
-        )
+        result_path = self.job_processor.get_job_data(work_id)
+        print(result_path)
+        full_path = self.job_processor.convert()
         print(f"file was saved to: {full_path}")
 
 
 def main(path_to_file, path_to_save, target):
     url = os.environ.get("CONVERTER_URL")
     api_key = os.environ.get("API_KEY")
-    print(target)
+    print(f"Target: {target}")
     converter_config = ConverterConfig(api_key, url)
     job_config = JobConfig(target, path_to_file, path_to_save)
-    job_processor = JobProcessorRemote(job_config, target, converter_config)
+    job_processor = JobProcessorRemote(job_config, converter_config)
     converter_cli = ConverterInterfaceCLI(job_processor)
     converter_cli.convert()
 
