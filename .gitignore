@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # project technical dirs
-./books/
+books/
