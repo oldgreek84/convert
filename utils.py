@@ -9,6 +9,16 @@ from typing import Callable
 import requests
 
 
+def coroutine(func):
+    """decorator for auto init coroutine generator"""
+
+    def wrap(*args, **kwargs):
+        gen = func(*args, **kwargs)
+        gen.send(None)
+        return gen
+    return wrap
+
+
 def catcher(func: Callable):
     """
     decorator catch all exception in function and
@@ -99,3 +109,7 @@ if __name__ == "__main__":
 
     resp = requests.get("http://www.google.com")
     save_data_from_responce_to_dir(get_full_file_path("some.txt", "book"), resp)
+
+
+class ParamsError(Exception):
+    """pass"""

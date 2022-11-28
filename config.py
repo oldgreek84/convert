@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 
@@ -11,16 +12,16 @@ class Target:
 class JobConfig:
     target: Target
     path_to_file: str
-    path_to_save: str
+    path_to_save: str = "books"
 
 
 class ConverterConfig:
     """Docstring for UrlConverter:."""
 
-    def __init__(self, api_key: str, api_url: str):
+    def __init__(self, api_key: str = None, api_url: str = None):
         """TODO: to be defined."""
-        self.api_key = api_key
-        self.api_url = api_url
+        self.api_key = api_key or os.environ.get("API_KEY")
+        self.api_url = api_url or os.environ.get("CONVERTER_URL")
         self.headers = {
             "main_header": {
                 "cache-control": "no-cache",
