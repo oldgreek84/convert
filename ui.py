@@ -3,9 +3,10 @@ import os
 import time
 
 from abc import ABC, abstractmethod
+from typing import Protocol
+
 import tkinter as tk
 import tkinter.filedialog as fd
-# import tkinter.ttk as ttk
 from tkinter import ttk
 
 
@@ -16,33 +17,21 @@ from processing_job import JobProcessor
 work_dir = os.path.abspath(__file__)
 
 
+class UI(Protocol):
+    def setup(self) -> None:
+        raise NotImplementedError
+
+    def run(self) -> None:
+        raise NotImplementedError
+
+
 class ConverterInterface(ABC):
     @abstractmethod
     def setup(self):
         pass
 
     @abstractmethod
-    def convert(self):
-        pass
-
-    @abstractmethod
     def run(self):
-        pass
-
-
-class ConverterInterfaceTk(ConverterInterface):
-    def __init__(self, job):
-        self.job = job
-        self.view = TkView(self)
-
-    def run(self):
-        self.view.run()
-
-    def convert(self):
-        print("Convert")
-        self.job.convert()
-
-    def setup(self):
         pass
 
 
@@ -55,15 +44,12 @@ class ConverterInterfaceCLI(ConverterInterface):
     -cat - [category] - category of formatting file (default "ebook")
     """
 
-    def __init__(self, processor: JobProcessor):
+    def __init__(self, processor):
         self.processor = processor
-        self.job = None
-        # self.setup()
 
     def setup(self):
         args = self._get_params(sys.argv)
-        config = JobConfig(*args)
-        self.job = self.processor(config)
+        self.processor.job_config(*args)
 
     def run(self):
         try:
@@ -71,39 +57,40 @@ class ConverterInterfaceCLI(ConverterInterface):
         except ParamsError:
             print(self.docstring)
 
-        if not self.job:
+        if not self.processor:
             return False
 
         self._run()
         return True
 
-    def convert(self):
-        return self._run
-
     def _run(self):
-        print(">>>  INTERFACE: start FIRST convert --------------------------")
-        self.job.convert()
+        print(">>> INTERFACE: start FIRST convert --------------------------")
+        self.processor.convert()
 
-        work_id = self.job.get_processor_data("work_id")
+        work_id = self.processor.get_processor_data("work_id")
         print("File was sent. Please wait...")
         print(f"Work ID: {work_id}")
 
-        print(">>>  INTERFACE: START status loop ----------------------------")
-        status = self.job.get_job_status()
-        while not self.job.is_completed():
-            # time.sleep(3)
-            status = self.job.check_status()
-            print(f"----INTERFACE: {status = } ")
-        print(">>>  INTERFACE: END status loop ------------------------------")
+        print(">>> INTERFACE: START status loop ----------------------------")
+        self._get_status()
+        print(">>> INTERFACE: END status loop ------------------------------")
 
-        result_path = self.job.get_processor_data("uri_to_downloas_file")
+        result_path = self.processor.get_processor_data("uri_to_downloas_file")
         print(f"Result path: {result_path}")
 
-        full_path = self.job.get_processor_data("full_path")
+        full_path = self.processor.get_processor_data("result")
         print(f"File was saved to: {full_path}")
 
-        print(">>>  INTERFACE: END ------------------------------------------")
+        print(">>> INTERFACE: END ------------------------------------------")
         return full_path
+
+    def _get_status(self):
+        while not self.processor.is_completed():
+            time.sleep(3)
+            status = self.processor.get_job_status()
+            print(f">>> INTERFACE: {status = } {self.processor.is_completed() = } ")
+            print(f">>> INTERFACE: {status = } {self.processor.worker.get_result() = } ")
+            print(f">>> INTERFACE: {status = } {self.processor.worker.is_completed() = } ")
 
     def _get_params(self, args):
         if len(args) == 1:
@@ -120,9 +107,25 @@ class ConverterInterfaceCLI(ConverterInterface):
         working_target = data_settings.get("-t", "mobi")
         working_category = data_settings.get("-cat", "ebook")
 
-        print("Params: ", working_file_path, working_target, working_category)
+        print(f">>> INTERFACE (Params):\n {working_file_path}\n{working_target}\n{working_category}")
         target_object = Target(working_target, working_category)
         return target_object, working_file_path
+
+
+class ConverterInterfaceTk(ConverterInterface):
+    def __init__(self, job):
+        self.job = job
+        self.view = TkView(self)
+
+    def run(self):
+        self.view.run()
+
+    def convert(self):
+        print("Convert")
+        self.job.convert()
+
+    def setup(self):
+        pass
 
 
 class TkView:
