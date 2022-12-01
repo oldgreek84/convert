@@ -10,7 +10,7 @@ import requests
 
 from utils import get_full_file_path
 from config import JobConfig, ConverterConfig
-from worker import Worker1, Worker2, Worker3, Worker4
+from worker import WorkerProtocol, Worker4
 
 
 class Status(Enum):
@@ -27,33 +27,29 @@ class JobProcessor(ABC):
         pass
 
     @abstractmethod
+    def is_completed(self) -> bool:
+        """return True if job is completed"""
+
+    @abstractmethod
+    def get_job_status(self) -> Any:
+        """return job status"""
+
+    @abstractmethod
     def send_job_data(self) -> str:
         """send job data for processing. Return job ID"""
 
     @abstractmethod
-    def get_job_result(self, job_id: str) -> dict:
-        """get job data after processing"""
+    def get_job_result(self, job_id: str) -> str:
+        """get job data after processing and return it"""
 
     @abstractmethod
-    def convert(self) -> str:
-        """converts the data to needed format. Save result"""
-
-    @abstractmethod
-    def get_processor_data(self, key) -> Any:
-        """docstring"""
-
-    @abstractmethod
-    def is_completed(self) -> bool:
-        """docstring"""
-
-    @abstractmethod
-    def get_job_status(self) -> Any:
-        """docstring"""
+    def save_file(self, path_for_save: str) -> str:
+        """save job result after processing and return path to file"""
 
 
 class JobProcessorDummy(JobProcessor):
     dummy_msg = None
-    dummy_url = None
+    dummy_url = "http://localhost:5000"
     dummy_response = {
         "message": dummy_msg,
         "output": None if dummy_msg != 'completed' else [{"uri": "http://uri_for_download"}],
@@ -63,109 +59,92 @@ class JobProcessorDummy(JobProcessor):
             "info": None if dummy_msg != "error" else "it`s error message!!!"},
     }
 
-    def __init__(self, job_config, worker, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.job_config = job_config
-        self.worker = worker
         self._status = "ready"
         self._data = {}
-
-    def send_job_data(self) -> str:
-        print("--- DUMMY --: Data was sent")
-        return "<<test id>>"
-
-    def get_job_result(self, job_id: str) -> dict:
-        print("--- DUMMY --: Data was got")
-        return {"result": self.get_processor_data("result")}
 
     def is_completed(self) -> bool:
         return self._status in ["completed", "error"]
 
     def get_job_status(self) -> str:
-        print(f"--- PROCESSOR: {self._status = }")
-        if self.worker.is_completed():
-            self._status = "completed"
-            # print(f"--- PROCESSOR: {self._status = }")
         return self._status
 
-    def get_worker(self, *args, **kwargs):
-        return self.worker(*args, **kwargs)
-
-    def convert(self):
-        """
-        sen data
-        get status
-        if status -> "completed" -> return data
-        save data
-        """
-
-        print("==============================")
-        self._convert()
-        print("==============================")
-
-    def _convert(self):
-        work_id = self.send_job_data()
+    def send_job_data(self) -> str:
+        print("--- PROCESSOR: Data was sent")
+        res = requests.get(f"{self.dummy_url}/for_send/")
+        work_id = res.json()["work_id"]
         self._data["work_id"] = work_id
+        return work_id
 
-        self.worker.execute(self.get_response_status, work_id)
-        self.worker.execute(self.check_result)
-
-    def get_response_status(self, work_id):
-        while True:
-            time.sleep(3)
-            res = requests.get("http://localhost:5000/", json={})
-            result, status = res, res.json()["status"]["code"]
-            self._status = status
-            print(f"--- PROCESSOR: RESPONSE WORK {status = } {work_id = }")
-            if status in ["error", "completed"]:
-                break
+    def get_job_result(self, job_id: str) -> dict:
+        status = self._get_job_status(job_id)
+        if error := status.get("error"):
+            raise ValueError(error)
+        result = status.get("result")
+        self._data["uri_to_downloas_file"] = result
         return result
 
-    def prepare_result(self):
+    def _get_job_status(self, job_id):
+        res = requests.get("http://localhost:5000/", json={"job_id": job_id})
+        result, status = res, res.json()["status"]["code"]
+
+        self._status = status
+
+        if status != "completed":
+            return {"error": result.json()["status"]["info"]}
+        return {"result": result.json()["output"][0]["uri"]}
+
+    def prepare_result(self, raw_data: requests.Response):
         res = None
         try:
-            data = self.worker.get_result().json()
+            data = raw_data.json()
             res = data["status"]["info"] or data["output"][0]["uri"]
         except Exception as ex:
             print(f"--- PROCESSOR ERROR: {ex = }")
         return res
 
-    def check_result(self):
-        while True:
-            time.sleep(1)
-            status = self.get_job_status()
-            print(f"--- PROCESSOR: RESULT WORK {status = } {self.worker.is_completed() = }")
-            if self.is_completed():
-                break
-
-        result = self.prepare_result()
-        self.check_saved(result)
-
-    def check_saved(self, uri_to_downloas_file):
-        full_path = self.save_file(uri_to_downloas_file)
-
-        self._data["uri_to_downloas_file"] = uri_to_downloas_file
-        self._data["result"] = full_path
-        print("--- CHECK SAVED --- ")
-        return full_path
-
     def save_file(self, path_to_file="path/to/file"):
         print(f"--- DUMMY --: file {path_to_file} was saved")
-        return "path/to/saved"
-
-    def get_processor_data(self, key):
-        return self._data.get(key, None)
+        full_path = "path/to/saved"
+        self._data["full_path"] = full_path
+        return full_path
 
 
 class JobProcessorRemote(JobProcessor):
-    def __init__(self, job_config: JobConfig, *args):
+    def __init__(self, job_config: JobConfig, woker: WorkerProtocol):
         self.job_config = job_config
         self.converter_config = ConverterConfig()
         self._data = {}
         self._status = "ready"
 
-    def get_processor_data(self, key):
-        return self._data.get(key, False)
+    # def convert(self):
+    #     """
+    #     main function create all resquests to remote server
+    #     and save converted file to local directory
+    #     """
+    #     self._convert()
+
+    # def _convert(self):
+
+    #     self.validate_path()
+    #     work_id = self.send_job_data()
+
+    #     uri_to_downloas_file = self.get_job_result(work_id)
+    #     full_path = self.save_file(self.job_config.path_to_save, uri_to_downloas_file)
+
+    #     self._data["work_id"] = work_id
+    #     self._data["uri_to_downloas_file"] = uri_to_downloas_file
+    #     self._data["full_path"] = full_path
+
+    #     return full_path
+
+    def validate_path(self):
+        """validate path to file for converting"""
+
+        if not os.path.isfile(self.job_config.path_to_file):
+            raise ValueError("invalid file path")
+        return True
 
     def send_job_data(self) -> str:
         # get server`s options for convert
@@ -254,38 +233,9 @@ class JobProcessorRemote(JobProcessor):
         status_code = response.json()["status"]["code"]
         return response, status_code
 
-    def convert(self):
-        """
-        main function create all resquests to remote server
-        and save converted file to local directory
-        """
-        self._convert()
-
-    def _convert(self):
-
-        self.validate_path()
-        work_id = self.send_job_data()
-
-        uri_to_downloas_file = self.get_job_result(work_id)
-        full_path = self.save_file(self.job_config.path_to_save, uri_to_downloas_file)
-
-        self._data["work_id"] = work_id
-        self._data["uri_to_downloas_file"] = uri_to_downloas_file
-        self._data["full_path"] = full_path
-
-        return full_path
-
-    def validate_path(self):
-        """validate path to file for converting"""
-
-        if not os.path.isfile(self.job_config.path_to_file):
-            raise ValueError("invalid file path")
-        return True
-
     # TODO: create PATH saver class
     def save_file(self, path_to_save, uri_to_downloas_file):
         return self._save_from_url(uri_to_downloas_file, path_to_save)
-
 
     def _save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> str:
         """saves file form remote URL to directory"""

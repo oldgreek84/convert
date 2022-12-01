@@ -53,7 +53,18 @@ def threaded(func, daemon=False):
     return wrap
 
 
-class WorkerProtocol(ABC):
+class WorkerProtocol(Protocol):
+    def is_completed(self):
+        raise NotImplementedError()
+
+    def get_result(self):
+        raise NotImplementedError()
+
+    def execute(self, func, *args, **kwargs):
+        raise NotImplementedError()
+
+
+class WorkerInterface(ABC):
 
     def __init__(self, job, *args, **kwargs):
         self.job = job
@@ -73,7 +84,35 @@ class WorkerProtocol(ABC):
         return self._status
 
 
-class Worker(WorkerProtocol):
+class Worker4:
+    """ worker are implemented by threading module"""
+
+    def __init__(self):
+        self._status = None
+        self._thread = None
+        self._result = None
+
+    def is_completed(self):
+        return not self._thread.is_alive()
+
+    def get_result(self):
+        return self._result
+
+    def execute(self, func, *args, **kwargs):
+        self._thread = threading.Thread(
+            target=self.wrapper,
+            args=(func, *args),
+            kwargs=kwargs
+        )
+        self._thread.start()
+
+    def wrapper(self, func, *args, **kwargs):
+        result = func(*args, **kwargs)
+        print(f"--------- WORKER <{func.__name__}>: {result = }")
+        self._result = result
+
+
+class Worker(WorkerInterface):
 
     def is_completed(self):
         return self._status in ["error", "completed"]
@@ -195,7 +234,7 @@ class Worker(WorkerProtocol):
             print("check coroutine closing...")
 
 
-class Worker1(WorkerProtocol):
+class Worker1(WorkerInterface):
 
     def is_completed(self):
         return self._status in ["error", "completed"]
@@ -214,7 +253,7 @@ class Worker1(WorkerProtocol):
         pass
 
 
-class Worker2(WorkerProtocol):
+class Worker2(WorkerInterface):
 
     def is_completed(self):
         return self._status in ["error", "completed"]
@@ -258,7 +297,7 @@ class Worker2(WorkerProtocol):
             print("closing.........")
 
 
-class Worker3(WorkerProtocol):
+class Worker3(WorkerInterface):
 
     def is_completed(self):
         return self._status in ["error", "completed"]
@@ -339,34 +378,6 @@ class Worker3(WorkerProtocol):
                     waiter.send(resp_status)
         except GeneratorExit:
             print("check coroutine closing...")
-
-
-class Worker4:
-    """ worker are implemented by threading module"""
-
-    def __init__(self):
-        self._status = None
-        self._thread = None
-        self._result = None
-
-    def is_completed(self):
-        return not self._thread.is_alive()
-
-    def get_result(self):
-        return self._result
-
-    def execute(self, func, *args, **kwargs):
-        self._thread = threading.Thread(
-            target=self.wrapper,
-            args=(func, *args),
-            kwargs=kwargs
-        )
-        self._thread.start()
-
-    def wrapper(self, func, *args, **kwargs):
-        result = func(*args, **kwargs)
-        print(f"--------- WORKER <{func.__name__}>: {result = }")
-        self._result = result
 
 
 if __name__ == '__main__':

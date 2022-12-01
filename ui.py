@@ -12,17 +12,50 @@ from tkinter import ttk
 
 from utils import parse_command, get_path, ParamsError
 from config import Target, JobConfig
-from processing_job import JobProcessor
+from processor import JobProcessor
 
 work_dir = os.path.abspath(__file__)
 
 
-class UI(Protocol):
+class UIProtocol(Protocol):
     def setup(self) -> None:
         raise NotImplementedError
 
     def run(self) -> None:
         raise NotImplementedError
+
+    def display_job_status(self, status):
+        raise NotImplementedError
+
+    def display_job_result(self, result):
+        raise NotImplementedError
+
+    def display_job_id(self, job_id):
+        raise NotImplementedError
+
+    def display_errors(self, errors: list):
+        raise NotImplementedError
+
+
+class DummyUI:
+    def setup(self):
+        print("DUMMY UI: setup")
+
+    def run(self):
+        print("DUMMY UI: run")
+
+    def display_job_status(self, status):
+        print(f"DUMMY UI: display status {status}")
+
+    def display_job_result(self, result):
+        print(f"DUMMY UI: display result {result}")
+
+    def display_job_id(self, job_id):
+        print(f"DUMMY UI: display ID {job_id}")
+
+    def display_errors(self, errors: list):
+        for error in errors:
+            print(f"DUMMY UI: ERROR: {error}")
 
 
 class ConverterInterface(ABC):
