@@ -1,8 +1,6 @@
 import sys
 import os
-import time
 
-from abc import ABC, abstractmethod
 from typing import Protocol
 
 import tkinter as tk
@@ -18,10 +16,7 @@ work_dir = os.path.abspath(__file__)
 
 
 class UIProtocol(Protocol):
-    def setup(self) -> None:
-        raise NotImplementedError
-
-    def run(self) -> None:
+    def setup(self, processor: JobProcessor, *args, **kwargs) -> bool:
         raise NotImplementedError
 
     def display_job_status(self, status):
@@ -38,11 +33,17 @@ class UIProtocol(Protocol):
 
 
 class DummyUI:
-    def setup(self):
-        print("DUMMY UI: setup")
+    def __init__(self, processor, converter, worker=None):
+        self.processor = processor
+        self.converter = converter
+        self.worker = worker
 
     def run(self):
-        print("DUMMY UI: run")
+        pass
+
+    def setup(self, processor: JobProcessor) -> bool:
+        print(f"DUMMY UI: setup {processor}")
+        return True
 
     def display_job_status(self, status):
         print(f"DUMMY UI: display status {status}")
@@ -58,74 +59,52 @@ class DummyUI:
             print(f"DUMMY UI: ERROR: {error}")
 
 
-class ConverterInterface(ABC):
-    @abstractmethod
-    def setup(self):
-        pass
-
-    @abstractmethod
-    def run(self):
-        pass
+def yes_no(message="run [N/y] ?"):
+    res = input(message)
+    if res.lower() == "y":
+        return True
+    return False
 
 
-class ConverterInterfaceCLI(ConverterInterface):
+class ConverterInterfaceCLI:
     docstring = """
-    command needs:
+>>> INTERFACE command needs:
     -path - full/path/to/file
     -name - file_name in current directory
     -t - [target] - string of file format(default "mobi")
     -cat - [category] - category of formatting file (default "ebook")
     """
 
-    def __init__(self, processor):
-        self.processor = processor
+    def run(self, processor: JobProcessor):
+        return self.setup(processor) and yes_no()
 
-    def setup(self):
-        args = self._get_params(sys.argv)
-        self.processor.job_config(*args)
+    def display_job_status(self, status):
+        print(f">>> INTERFACE STATUS: {status}")
 
-    def run(self):
+    def display_job_result(self, result):
+        print(f">>> INTERFACE RESULT: {result}")
+
+    def display_job_id(self, job_id):
+        print(f">>> INTERFACE JOB ID: {job_id}")
+
+    def display_errors(self, errors: list):
+        self.display_job_status("error")
+        for error in errors:
+            print(f">>> INTERFACE ERROR: {error}")
+
+    def setup(self, processor: JobProcessor):
         try:
-            self.setup()
+            args = self._get_params(sys.argv)
         except ParamsError:
             print(self.docstring)
-
-        if not self.processor:
             return False
 
-        self._run()
-        return True
+        job_config = JobConfig(*args)
+        processor.job_config = JobConfig(*args)
+        print(f"TEST INTERFACE: {processor.job_config = }")
+        return job_config
 
-    def _run(self):
-        print(">>> INTERFACE: start FIRST convert --------------------------")
-        self.processor.convert()
-
-        work_id = self.processor.get_processor_data("work_id")
-        print("File was sent. Please wait...")
-        print(f"Work ID: {work_id}")
-
-        print(">>> INTERFACE: START status loop ----------------------------")
-        self._get_status()
-        print(">>> INTERFACE: END status loop ------------------------------")
-
-        result_path = self.processor.get_processor_data("uri_to_downloas_file")
-        print(f"Result path: {result_path}")
-
-        full_path = self.processor.get_processor_data("result")
-        print(f"File was saved to: {full_path}")
-
-        print(">>> INTERFACE: END ------------------------------------------")
-        return full_path
-
-    def _get_status(self):
-        while not self.processor.is_completed():
-            time.sleep(3)
-            status = self.processor.get_job_status()
-            print(f">>> INTERFACE: {status = } {self.processor.is_completed() = } ")
-            print(f">>> INTERFACE: {status = } {self.processor.worker.get_result() = } ")
-            print(f">>> INTERFACE: {status = } {self.processor.worker.is_completed() = } ")
-
-    def _get_params(self, args):
+    def _get_params(self, args: tuple) -> tuple:
         if len(args) == 1:
             raise ParamsError
 
@@ -140,25 +119,40 @@ class ConverterInterfaceCLI(ConverterInterface):
         working_target = data_settings.get("-t", "mobi")
         working_category = data_settings.get("-cat", "ebook")
 
-        print(f">>> INTERFACE (Params):\n {working_file_path}\n{working_target}\n{working_category}")
         target_object = Target(working_target, working_category)
+        print(
+            ">>> INTERFACE (Params):\n",
+            f"{working_file_path = }\n",
+            f"{working_target = }\n",
+            f"{working_category = }\n",
+            f"{target_object = }\n"
+        )
         return target_object, working_file_path
 
 
-class ConverterInterfaceTk(ConverterInterface):
-    def __init__(self, job):
-        self.job = job
+class ConverterInterfaceTk:
+    def __init__(self):
         self.view = TkView(self)
-
-    def run(self):
         self.view.run()
 
     def convert(self):
-        print("Convert")
-        self.job.convert()
+        # self.view.run()
+        print(f"RUN CONVERT {self}")
 
-    def setup(self):
+    def setup(self, processor: JobProcessor):
         pass
+
+    def display_job_status(self, status):
+        raise NotImplementedError
+
+    def display_job_result(self, result):
+        raise NotImplementedError
+
+    def display_job_id(self, job_id):
+        raise NotImplementedError
+
+    def display_errors(self, errors: list):
+        raise NotImplementedError
 
 
 class TkView:
@@ -210,7 +204,7 @@ class TkView:
         print(msg)
 
     def interface_convert(self):
-        self.interface.convert(self.interface)
+        self.interface.convert()
 
     def open_file(self):
         filetypes = (
@@ -235,3 +229,12 @@ class TkView:
     def run(self):
         self.create_view()
         self.root.mainloop()
+
+
+def main():
+    inter = ConverterInterfaceTk()
+    inter.view.run()
+
+
+if __name__ == '__main__':
+    main()

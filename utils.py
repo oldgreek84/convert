@@ -19,22 +19,24 @@ def coroutine(func):
     return wrap
 
 
-def catcher(func: Callable):
-    """
-    decorator catch all exception in function and
+def catcher(error_list=None):
+    """ decorator catch all exception in function and
     retun message with errors
     """
+    def catcher_wrap(func: Callable):
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except Exception as ex:
-            errors = {"status": "error", "message": ex.args[-1]}
-            print(errors)
-            func.errors = errors
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                func(*args, **kwargs)
+            except Exception as ex:
+                errors = {"status": "error", "message": str(ex)}
+                print(f"CATCHER: {errors = }")
+                func.errors = errors
+                error_list.append(errors)
 
-    return wrapper
+        return wrapper
+    return catcher_wrap
 
 
 def get_value(arg: str) -> str:

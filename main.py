@@ -17,11 +17,11 @@ load_dotenv()
 
 
 def main() -> None:
-    cli = DummyUI()
+    cli = ConverterInterfaceCLI()
     worker = Worker4()
-    processor = JobProcessorDummy()
+    processor = JobProcessorRemote()
     converter = Converter(cli, processor, worker)
-    converter.convert()
+    converter.start()
 
 
 if __name__ == "__main__":

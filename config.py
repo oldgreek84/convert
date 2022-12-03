@@ -1,11 +1,12 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Target:
-    target: str = "mobi"
-    category: str = "ebook"
+    target: str
+    category: str
+    options: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -22,6 +23,8 @@ class ConverterConfig:
         """TODO: to be defined."""
         self.api_key = api_key or os.environ.get("API_KEY")
         self.api_url = api_url or os.environ.get("CONVERTER_URL")
+        # self.api_key = "some key"
+        # self.api_url = "http://localhost:5000/"
         self.headers = {
             "main_header": {
                 "cache-control": "no-cache",

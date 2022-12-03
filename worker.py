@@ -85,10 +85,9 @@ class WorkerInterface(ABC):
 
 
 class Worker4:
-    """ worker are implemented by threading module"""
+    """ worker was implemented by threading module"""
 
     def __init__(self):
-        self._status = None
         self._thread = None
         self._result = None
 
@@ -108,7 +107,6 @@ class Worker4:
 
     def wrapper(self, func, *args, **kwargs):
         result = func(*args, **kwargs)
-        print(f"--------- WORKER <{func.__name__}>: {result = }")
         self._result = result
 
 
