@@ -17,9 +17,9 @@ load_dotenv()
 
 
 def main() -> None:
-    cli = ConverterInterfaceCLI()
+    cli = ConverterInterfaceTk()
     worker = Worker4()
-    processor = JobProcessorRemote()
+    processor = JobProcessorDummy()
     converter = Converter(cli, processor, worker)
     converter.start()
 

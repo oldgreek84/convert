@@ -1,7 +1,7 @@
 import sys
 import os
 
-from typing import Protocol
+from typing import Protocol, Any
 
 import tkinter as tk
 import tkinter.filedialog as fd
@@ -134,13 +134,31 @@ class ConverterInterfaceTk:
     def __init__(self):
         self.view = TkView(self)
         self.view.run()
+        self.converter = None
 
-    def convert(self):
-        # self.view.run()
-        print(f"RUN CONVERT {self}")
+    def run(self):
+        print("RUN")
+        self.view.set_status("convert")
+        config = self.setup()
+        print(f"CONFIG RUN: : {config = }")
+        return config
 
-    def setup(self, processor: JobProcessor):
-        pass
+    def setup(self):
+        print(f"SETUP {self}")
+        args = self._get_params()
+        print(f"PARAMS: {args = }")
+        job_config = JobConfig(*args)
+        print(f"CONFIG: : {job_config = }")
+        return job_config
+
+    def _get_params(self):
+        target_object = Target(
+            self.view.get("target"),
+            self.view.get("category")
+        )
+        path_to_file = self.view.get("path_to_file")
+        print(f"SETUP {target_object = } {path_to_file = }")
+        return target_object, path_to_file
 
     def display_job_status(self, status):
         raise NotImplementedError
@@ -159,6 +177,13 @@ class TkView:
     JOB_VARIANTS = ("ebook", "video")
     FORMAT_VARIANTS = ("mobi", "pdf")
 
+    docstring = """
+    -path - full/path/to/file
+    -name - file_name in current directory
+    -t - [target] - string of file format(default "mobi")
+    -cat - [category] - category of formatting file (default "ebook")
+    """
+
     def __init__(self, interface):
         self.interface = interface
         self.root = tk.Tk()
@@ -166,51 +191,83 @@ class TkView:
         self.root.title('gui')
         self.root.geometry('600x300')
         self.app = tk.Frame(self.root)
+        self._config: dict[str] = {}
 
     def create_view(self):
         self.app.grid()
 
-        butn = tk.Button(self.app, text='Convert', command=self.interface_convert)
-        butn.grid()
+        # add buttons section
+        self.convert_btn = tk.Button(self.app, text='Convert', command=self.interface_convert)
+        self.convert_btn.grid(column=0, row=0)
 
-        butn2 = tk.Button(self.app, text="Open file", command=self.open_file)
-        butn2.grid()
+        self.open_file_btn = tk.Button(self.app, text="Open file", command=self.open_file)
+        self.open_file_btn.grid(column=1, row=0)
 
-        quit_btn = tk.Button(self.root, text="Quit", command=self.root.destroy)
-        quit_btn.grid()
+        self.quit_btn = tk.Button(self.app, text="Quit", command=self.root.destroy)
+        self.quit_btn.grid(column=5, row=0)
+
+        # add options section
+        self.check_targer = tk.StringVar()
+        tk.Checkbutton(
+            self.app,
+            text="taget",
+            variable=self.check_targer,
+            command=lambda: self.update_text(self.check_targer.get()),
+        ).grid(column=0, row=2)
 
         j_vars = tk.Variable(value=self.JOB_VARIANTS)
         f_vars = tk.Variable(value=self.FORMAT_VARIANTS)
 
         self.list_box = ttk.Combobox(
-            self.root,
+            self.app,
             textvariable=j_vars,
             state="readonly",
             values=self.JOB_VARIANTS)
-        self.list_box.grid()
-        self.list_box.bind("<<ComboboxSelected>>", self.item_select)
+        self.list_box.grid(column=0, row=1, columnspan=2)
+        self.list_box.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.set_data("category", self.list_box.get())
+        )
 
         self.list_box2 = ttk.Combobox(
-            self.root,
+            self.app,
             textvariable=f_vars,
             state="readonly",
             values=self.FORMAT_VARIANTS)
-        self.list_box2.grid()
-        self.list_box2.bind("<<ComboboxSelected>>", self.item_select(self.list_box2))
+        self.list_box2.grid(column=2, row=1)
+        self.list_box2.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.set_data("target", self.list_box2.get())
+        )
+
+        # add status and info section
+        self.result_txt = tk.Text(self.app, width=40, height=5, wrap=tk.WORD)
+        self.result_txt.grid(row=11, column=0, columnspan=3)
+
+        self.status_field = tk.Text(self.app, width=20, height=1)
+        self.status_field.grid(column=2, row=0, columnspan=2)
+
+    def set_data(self, key, value):
+        self._config[key] = value
 
     def item_select(self, event):
-        print(event)
+        print(f"TEST: {event = }")
         msg = self.list_box.get()
-        print(msg)
+        print(f"TEST: {msg = }")
 
     def interface_convert(self):
-        self.interface.convert()
+        print(f"{self.list_box = } {self.list_box.get() = }")
+        if not (self.list_box.get() and self.list_box2.get()):
+            self.update_text(self.docstring)
+            return False
+        self.interface.run()
+        return True
 
     def open_file(self):
         filetypes = (
-            ('text files', '*.txt'),
             ('book files', '*.mobi'),
             ('book files', '*.fb2'),
+            ('text files', '*.txt'),
             ('All files', '*.*')
         )
 
@@ -219,15 +276,28 @@ class TkView:
             initialdir=work_dir,
             filetypes=filetypes)
 
-        print(filename)
+        print(f"{filename = }")
+        self._config["path_to_file"] = filename
 
         tk.messagebox.showinfo(
             title='Selected File',
             message=filename or "file not selected"
         )
 
+    def update_text(self, message):
+        self.result_txt.delete(0.0, tk.END)
+        self.result_txt.insert(0.0, message)
+
+    def set_status(self, msg):
+        self.status_field.delete(0.0, tk.END)
+        self.status_field.insert(0.0, msg)
+
+    def get(self, key: str) -> Any:
+        return self._config.get(key)
+
     def run(self):
         self.create_view()
+        self.set_status("ready")
         self.root.mainloop()
 
 

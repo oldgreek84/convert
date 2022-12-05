@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import traceback
@@ -25,11 +26,16 @@ class Converter:
         self.ui = ui
         self.processor = processor
         self.worker = worker
+        self.config = None
         self._data = {}
 
     def start(self):
         # TODO: redesign start method and work with UI
-        if config := self.ui.run(self.processor):
+        config = self.ui.run()
+        print(f"CONVERTER: {config = }")
+        if config:
+            print(f"CONVERTER IF: {config = }")
+            self.config = config
             self.convert()
 
     def convert(self) -> bool:
@@ -54,10 +60,34 @@ class Converter:
         if result:
             self.save(result)
 
+    def validate_path(self, path_to_file: str):
+        """validate path to file for converting"""
+
+        if not os.path.isfile(path_to_file):
+            raise ValueError("invalid file path")
+        return True
+
+    def get_file_path(self):
+        return self.config.path_to_file
+
+    def get_job_options(self):
+        return {
+            "category": self.config.job_category,
+            "target": self.config.job_target,
+            "options": {},
+        }
+
     def send_job(self) -> str:
         """send job data for processing. Return job ID"""
 
-        job_id = self.processor.send_job_data()
+        path_to_file = self.get_file_path()
+        self.validate_path(path_to_file)
+
+        options = self.get_job_options()
+
+        with open(path_to_file, "rb") as file_data:
+            job_id = self.processor.send_job_data(path_to_file, file_data, options)
+
         self.ui.display_job_status(self.processor.get_job_status(job_id))
         self.ui.display_job_id(job_id)
         return job_id

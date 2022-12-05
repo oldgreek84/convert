@@ -15,24 +15,30 @@ class JobConfig:
     path_to_file: str
     path_to_save: str = "books"
 
+    @property
+    def job_target(self):
+        return self.target.target
 
-class ConverterConfig:
+    @property
+    def job_category(self):
+        return self.target.category
+
+
+class APIConfig:
     """Docstring for UrlConverter:."""
 
-    def __init__(self, api_key: str = None, api_url: str = None):
+    def __init__(self, token: str = None, url: str = None):
         """TODO: to be defined."""
-        self.api_key = api_key or os.environ.get("API_KEY")
-        self.api_url = api_url or os.environ.get("CONVERTER_URL")
-        # self.api_key = "some key"
-        # self.api_url = "http://localhost:5000/"
+        self.token = token or os.environ.get("API_KEY")
+        self.url = url or os.environ.get("CONVERTER_URL")
         self.headers = {
             "main_header": {
                 "cache-control": "no-cache",
                 "content-type": "application/json",
-                "x-oc-api-key": self.api_key,
+                "x-oc-api-key": self.token,
             },
             "cache_header": {
-                "cache-control": "no-cache", "x-oc-api-key": self.api_key},
+                "cache-control": "no-cache", "x-oc-api-key": self.token},
         }
 
     def get_header(self, header_key: str):
