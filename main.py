@@ -10,18 +10,18 @@ from processor import (
 )
 from config import JobConfig
 from ui import ConverterInterfaceCLI, ConverterInterfaceTk, DummyUI
-from worker import Worker1, Worker2, Worker3, Worker4
+from worker import ThreadWorker
 from converter import Converter
 
 load_dotenv()
 
 
 def main() -> None:
-    cli = ConverterInterfaceTk()
-    worker = Worker4()
+    gui = ConverterInterfaceCLI()
+    worker = ThreadWorker()
     processor = JobProcessorDummy()
-    converter = Converter(cli, processor, worker)
-    converter.start()
+    converter = Converter(gui, processor, worker)
+    gui.run(converter)
 
 
 if __name__ == "__main__":

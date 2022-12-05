@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import traceback
 
@@ -26,17 +25,10 @@ class Converter:
         self.ui = ui
         self.processor = processor
         self.worker = worker
-        self.config = None
-        self._data = {}
+        self.config: JobConfig = None
 
-    def start(self):
-        # TODO: redesign start method and work with UI
-        config = self.ui.run()
-        print(f"CONVERTER: {config = }")
-        if config:
-            print(f"CONVERTER IF: {config = }")
-            self.config = config
-            self.convert()
+    def set_config(self, config: JobConfig) -> None:
+        self.config = config
 
     def convert(self) -> bool:
         """converts the data to needed format. Save result"""
@@ -44,10 +36,10 @@ class Converter:
         try:
             worker_executor = partial(self.worker.execute, self._convert)
             executor = worker_executor if self.worker else self._convert
+            self.worker.set_error_handler(self.error_handler)
             executor()
         except Exception as ex:
             self.ui.display_errors([f"some error {ex = }"])
-            print(traceback.print_exc())
 
     def _convert(self):
         # send file to processor
@@ -105,11 +97,13 @@ class Converter:
                 self.ui.display_errors([error])
                 return False
 
-        result = self.processor.get_job_result(job_id)
-        return result
+        return self.processor.get_job_result(job_id)
+
+    def error_handler(self, error):
+        self.ui.display_errors([str(error)])
 
     def save(self, file_path: Optional[Union[Path, str]]) -> None:
-        path = self.processor.save_file(file_path)
+        path = self.processor.save_file(file_path, self.config.path_to_save)
         self.ui.display_job_result(path)
 
 

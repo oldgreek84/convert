@@ -70,8 +70,6 @@ class JobProcessorDummy(JobProcessor):
         self._status = "ready"
         self._data = {}
         self._result = None
-        self.errors = []
-        self.job_config = None
 
     def is_completed(self) -> bool:
         return self._status == "completed"
@@ -122,6 +120,7 @@ class JobProcessorDummy(JobProcessor):
             f"{self.dummy_url}/{job_id}",
         )
 
+        print(f"TEST:  {response.text = }")
         res = response.json()
         print(f"TEST: {res = }")
         self._check_errors(res)

@@ -1,17 +1,17 @@
 import time
 import threading
-import asyncio
 import queue
 from concurrent.futures import ThreadPoolExecutor
 
-from functools import wraps, partial
+from functools import wraps
 
-from typing import Generator, Protocol
+from typing import Generator, Protocol, Callable, Any
 from abc import ABC, abstractmethod
 
 import requests
 
 from utils import coroutine
+from observer import Signal
 
 _DEFAULT_POOL = ThreadPoolExecutor()
 
@@ -30,15 +30,17 @@ def threaded(func, daemon=False):
     """decorator for long-time operation"""
 
     def wrapped_f(wrapped_q, *args, **kwargs):
-        '''this function calls the decorated function and puts the
-        result in a queue'''
+        """ this function calls the decorated function and puts the
+        result in a queue
+        """
         ret = func(*args, **kwargs)
         wrapped_q.put(ret)
 
     def wrap(*args, **kwargs):
-        '''this is the function returned from the decorator. It fires off
+        """ this is the function returned from the decorator. It fires off
         wrapped_f in a new thread and returns the thread object with
-        the result queue attached'''
+        the result queue attached
+        """
 
         queue_q = queue.Queue()
 
@@ -63,6 +65,9 @@ class WorkerProtocol(Protocol):
     def execute(self, func, *args, **kwargs):
         raise NotImplementedError()
 
+    def set_error_handler(self, handler: Callable) -> None:
+        raise NotImplementedError()
+
 
 class WorkerInterface(ABC):
 
@@ -84,20 +89,24 @@ class WorkerInterface(ABC):
         return self._status
 
 
-class Worker4:
+class ThreadWorker:
     """ worker was implemented by threading module"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._thread = None
         self._result = None
+        self._error = Signal()
 
-    def is_completed(self):
+    def is_completed(self) -> bool:
         return not self._thread.is_alive()
 
-    def get_result(self):
+    def get_result(self) -> Any:
         return self._result
 
-    def execute(self, func, *args, **kwargs):
+    def set_error_handler(self, handler: Callable) -> None:
+        self._error.connect(handler)
+
+    def execute(self, func, *args, **kwargs) -> None:
         self._thread = threading.Thread(
             target=self.wrapper,
             args=(func, *args),
@@ -105,9 +114,12 @@ class Worker4:
         )
         self._thread.start()
 
-    def wrapper(self, func, *args, **kwargs):
-        result = func(*args, **kwargs)
-        self._result = result
+    def wrapper(self, func, *args, **kwargs) -> None:
+        try:
+            result = func(*args, **kwargs)
+            self._result = result
+        except Exception as ex:
+            self._error.emit(ex)
 
 
 class Worker(WorkerInterface):
@@ -230,25 +242,6 @@ class Worker(WorkerInterface):
                     waiter.send(resp_status)
         except GeneratorExit:
             print("check coroutine closing...")
-
-
-class Worker1(WorkerInterface):
-
-    def is_completed(self):
-        return self._status in ["error", "completed"]
-
-    def execute(self):
-        # self.producer(self.get_status_cor())
-        pass
-
-    def main_cor(self):
-        pass
-
-    def waiter_cor(self):
-        pass
-
-    def checker_cor(self):
-        pass
 
 
 class Worker2(WorkerInterface):
@@ -380,16 +373,9 @@ class Worker3(WorkerInterface):
 
 if __name__ == '__main__':
 
-    def get_response_status(some, a):
-        print(f"{some = } {a = }")
-        res = requests.get("http://localhost:5000/", json={})
+    def get_response_status(some):
+        res = requests.get("http://localhost:5000/", json={"some": some})
         return res, res.json()["status"]["code"]
 
-    # w = Worker()
-    # w2 = Worker2()
-    # w3 = Worker3()
-    w4 = Worker4()
-    # w.setup(get_response_status, 11)
-    # w2.setup(get_response_status, 11)
-    # w3.setup(get_response_status, 11)
-    w4.execute(get_response_status, 11, a="a")
+    worker = ThreadWorker()
+    worker.execute(get_response_status, 11)

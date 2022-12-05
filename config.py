@@ -28,7 +28,6 @@ class APIConfig:
     """Docstring for UrlConverter:."""
 
     def __init__(self, token: str = None, url: str = None):
-        """TODO: to be defined."""
         self.token = token or os.environ.get("API_KEY")
         self.url = url or os.environ.get("CONVERTER_URL")
         self.headers = {
