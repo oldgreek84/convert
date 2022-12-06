@@ -160,7 +160,7 @@ class JobProcessorRemote(JobProcessor):
 
         # get server`s options for convert
         work_id, server_url = self._get_job_id_from_server(
-            self._set_data_options(**options))
+            self._set_data_options(options))
         url_upload = self._set_upload_url(work_id, server_url)
 
         # send file data to server

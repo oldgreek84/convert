@@ -19,7 +19,7 @@ load_dotenv()
 def main() -> None:
     gui = ConverterInterfaceCLI()
     worker = ThreadWorker()
-    processor = JobProcessorDummy()
+    processor = JobProcessorRemote()
     converter = Converter(gui, processor, worker)
     gui.run(converter)
 
