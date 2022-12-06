@@ -1,0 +1,131 @@
+{
+    'id': '56a5965d-b4af-4868-bbf6-61de38d86477',
+    'token': '7faf9e839350765091b61d4d912645c3',
+    'type': 'job',
+    'status': {
+        'code': 'incomplete',
+        'info': 'Missing information to run the job.'},
+    'errors': [],
+    'warnings': [],
+    'process': True,
+    'fail_on_input_error': True,
+    'fail_on_conversion_error': True,
+    'conversion': [
+        {
+            'id': 'ab4bb131-b134-438d-af91-9b7aa8becbd7',
+            'target': 'mobi',
+            'category': 'ebook',
+            'options': {
+                'reader': None,
+                'download_password': None,
+                'allow_multiple_outputs': False,
+                'preset': None,
+                'output_filename': None,
+                'title': None,
+                'author': None,
+                'border': None,
+                'encoding': None,
+                'ascii': False,
+                'enable_heuristics': False,
+                'base_font_size': None
+            },
+            'metadata': {},
+            'output_target': []
+            }
+        ],
+    'limits': [],
+    'input': [],
+    'output': [],
+    'callback': '',
+    'notify_status': False,
+    'server': 'https://www43.online-convert.com/dl/web8',
+    'spent': 0,
+    'created_at': '2022-12-02T16:10:39',
+    'modified_at': '2022-12-02T16:10:39'
+}
+
+{"id":{"job":"e191cca6-266e-45ff-9737-85d4ced7fd70","input":"d5e41b29-fcbb-4a56-8747-90c11b84f0cf"},"completed":true,"metadata":[],"warning":"Sending a UUID for each uploaded file is not mandatory but highly recommended to avoid possible errors. See https:\\/\\/www.api2convert.com\\/docs\\/getting_started\\/job_uploading_file.html"}
+
+{'id': 'e191cca6-266e-45ff-9737-85d4ced7fd70', 'token': '3e445700726df79c3138c121bcdd27b4', 'type': 'job', 'status': {'code': 'processing', 'info': 'The file is currently being processed.'}, 'errors': [], 'warnings': [], 'process': True, 'fail_on_input_error': True, 'fail_on_conversion_error': True, 'conversion': [{'id': '56ef92e7-88d9-4350-a23c-58c94094ad2f', 'target': 'mobi', 'category': 'ebook', 'options': {'reader': None, 'download_password': None, 'allow_multiple_outputs': False, 'preset': None, 'output_filename': None, 'title': None, 'author': None, 'border': None, 'encoding': None, 'ascii': False, 'enable_heuristics': False, 'base_font_size': None}, 'metadata': {}, 'output_target': []}], 'limits': [], 'input': [{'id': 'd5e41b29-fcbb-4a56-8747-90c11b84f0cf', 'type': 'upload', 'status': 'ready', 'source': '', 'engine': 'file', 'options': [], 'filename': 'King_Salimove_Ligvo_48109b_522920.fb2', 'size': 3153810, 'hash': '77b1a0c83ded4c0e615ba4fd393fe34f', 'checksum': '77b1a0c83ded4c0e615ba4fd393fe34f', 'content_type': 'application/xml', 'created_at': '2022-12-02T16:31:06', 'modified_at': '2022-12-02T16:31:06', 'credentials': {}, 'parameters': {}, 'metadata': {}}], 'output': [], 'callback': '', 'notify_status': False, 'server': 'https://www33.online-convert.com/dl/web7', 'spent': 0, 'created_at': '2022-12-02T16:30:47', 'modified_at': '2022-12-02T16:31:06'}
+{
+    'id': 'e191cca6-266e-45ff-9737-85d4ced7fd70',
+    'token': '3e445700726df79c3138c121bcdd27b4',
+    'type': 'job',
+    'status': {
+        'code': 'completed',
+        'info': 'The file has been successfully converted.'
+        },
+    'errors': [],
+    'warnings': [],
+    'process': True,
+    'fail_on_input_error': True,
+    'fail_on_conversion_error': True,
+    'conversion': [
+        {
+            'id': '56ef92e7-88d9-4350-a23c-58c94094ad2f',
+            'target': 'mobi',
+            'category': 'ebook',
+            'options': {
+                'reader': None,
+                'download_password': None,
+                'allow_multiple_outputs': False,
+                'preset': None,
+                'output_filename': None,
+                'title': None,
+                'author': None,
+                'border': None,
+                'encoding': None,
+                'ascii': False,
+                'enable_heuristics': False,
+                'base_font_size': None
+            },
+            'metadata': {},
+            'output_target': []
+        }
+    ],
+    'limits': [],
+    'input': [
+        {
+            'id': 'd5e41b29-fcbb-4a56-8747-90c11b84f0cf',
+            'type': 'upload',
+            'status': 'ready',
+            'source': '',
+            'engine': 'file',
+            'options': [],
+            'filename': 'King_Salimove_Ligvo_48109b_522920.fb2',
+            'size': 3153810,
+            'hash': '77b1a0c83ded4c0e615ba4fd393fe34f',
+            'checksum': '77b1a0c83ded4c0e615ba4fd393fe34f',
+            'content_type': 'application/xml',
+            'created_at': '2022-12-02T16:31:06',
+            'modified_at': '2022-12-02T16:31:06',
+            'credentials': {},
+            'parameters': {},
+            'metadata': {}
+        }
+    ],
+    'output': [
+        {
+            'id': '59670266-81fb-4d91-a27f-13ad45acef83',
+            'source': {
+                'conversion': '56ef92e7-88d9-4350-a23c-58c94094ad2f',
+                'input': ['d5e41b29-fcbb-4a56-8747-90c11b84f0cf']
+            },
+            'filename': 'King_Salimove_Ligvo_48109b_522920.mobi',
+            'uri': 'https://www33.online-convert.com/dl/web7/download-file/59670266-81fb-4d91-a27f-13ad45acef83/King_Salimove_Ligvo_48109b_522920.mobi',
+            'size': 1780896,
+            'status': 'enabled',
+            'content_type': 'application/x-mobipocket-ebook',
+            'downloads_counter': 0,
+            'checksum': '1a1ad9dece1da0b2b579e08e505d20db',
+            'created_at': '2022-12-02T16:31:22',
+            'metadata': {}
+        }
+    ],
+    'callback': '',
+    'notify_status': False,
+    'server': 'https://www33.online-convert.com/dl/web7',
+    'spent': 1,
+    'created_at': '2022-12-02T16:30:47',
+    'modified_at': '2022-12-02T16:31:22'
+}
