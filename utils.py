@@ -102,6 +102,10 @@ def save_data_from_responce_to_dir(
             opened_file.write(part)
 
 
+class ParamsError(Exception):
+    """common error class for parsing params"""
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         test_file_name = sys.argv[1]
@@ -111,7 +115,3 @@ if __name__ == "__main__":
 
     resp = requests.get("http://www.google.com")
     save_data_from_responce_to_dir(get_full_file_path("some.txt", "book"), resp)
-
-
-class ParamsError(Exception):
-    """pass"""

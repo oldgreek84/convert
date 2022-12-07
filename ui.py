@@ -194,6 +194,7 @@ class ConverterInterfaceTk:
         self.view.update_text(job_id)
 
     def display_errors(self, errors: list) -> None:
+        self.display_job_status("error")
         errors = "\n".join(errors)
         self.view.update_text(errors)
         self.view.show_message(errors)
@@ -233,24 +234,16 @@ class TkView:
         self.quit_btn.grid(column=5, row=0)
 
         # add options section
-        self.check_targer = tk.StringVar()
-        tk.Checkbutton(
-            self.app,
-            text="taget",
-            variable=self.check_targer,
-            command=lambda: self.update_text(self.check_targer.get()),
-        ).grid(column=0, row=3)
-
-        j_vars = tk.Variable(value=self.JOB_VARIANTS)
-        f_vars = tk.Variable(value=self.FORMAT_VARIANTS)
+        self.list_box_value = tk.Variable(value=self.JOB_VARIANTS)
+        self.list_box2_value = tk.Variable(value=self.FORMAT_VARIANTS)
 
         self.list_box = ttk.Combobox(
             self.app,
-            textvariable=j_vars,
+            textvariable=self.list_box_value,
             state="readonly",
-            values=("ebook", "video"),
+            values=self.JOB_VARIANTS
         )
-        self.list_box.current(1)
+        self.list_box.current(0)
         self.list_box.grid(column=0, row=1, columnspan=2)
         self.list_box.bind(
             "<<ComboboxSelected>>",
@@ -259,10 +252,10 @@ class TkView:
 
         self.list_box2 = ttk.Combobox(
             self.app,
-            textvariable=f_vars,
+            textvariable=self.list_box2_value,
             state="readonly",
             values=self.FORMAT_VARIANTS)
-        self.list_box2.current(1)
+        self.list_box2.current(0)
         self.list_box2.grid(column=2, row=1)
         self.list_box2.bind(
             "<<ComboboxSelected>>",

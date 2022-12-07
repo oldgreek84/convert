@@ -23,6 +23,10 @@ class JobConfig:
     def job_category(self):
         return self.target.category
 
+    @property
+    def job_options(self):
+        return self.target.options
+
 
 class APIConfig:
     """Docstring for UrlConverter:."""

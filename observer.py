@@ -1,6 +1,8 @@
 from typing import Callable
 
 
+# TODO: create decorator to add handlers
+
 class Signal:
     """class provide observer patern behaver"""
 

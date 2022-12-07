@@ -8,8 +8,7 @@ from processor import (
     JobProcessorRemote,
     JobProcessorDummy,
 )
-from config import JobConfig
-from ui import ConverterInterfaceCLI, ConverterInterfaceTk, DummyUI
+from ui import ConverterInterfaceCLI, ConverterInterfaceTk
 from worker import ThreadWorker
 from converter import Converter
 
@@ -17,7 +16,7 @@ load_dotenv()
 
 
 def main() -> None:
-    gui = ConverterInterfaceCLI()
+    gui = ConverterInterfaceTk()
     worker = ThreadWorker()
     processor = JobProcessorRemote()
     converter = Converter(gui, processor, worker)
