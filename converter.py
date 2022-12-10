@@ -29,17 +29,17 @@ class Converter:
     def set_config(self, config: JobConfig) -> None:
         self.config = config
 
-    def convert(self) -> bool:
+    def convert(self) -> None:
         """converts the data to needed format. Save converted file"""
 
         # TODO: processing error handler if worker was not setted
         try:
-            executor = self.get_convert_executor()
+            executor = self.set_converter_executor()
             executor()
         except Exception as ex:
             self.ui.display_errors([f"Converter had an error: {ex}"])
 
-    def get_convert_executor(self) -> Callable:
+    def set_converter_executor(self) -> Callable:
         executor = self._convert
         if self.worker:
             executor = partial(self.worker.execute, self._convert)

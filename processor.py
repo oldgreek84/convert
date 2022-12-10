@@ -46,6 +46,7 @@ class JobProcessor(ABC):
 class JobProcessorRemote(JobProcessor):
     # TODO: refacotor to remove self._status, self._result
     # and replace its to return value
+    # we want replacing some details
     def __init__(self) -> None:
         self.api_config = APIConfig()
         self._status = "ready"
