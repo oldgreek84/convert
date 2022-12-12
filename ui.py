@@ -11,7 +11,6 @@ from tkinter import ttk
 
 from utils import parse_command, get_path, ParamsError
 from config import Target, JobConfig
-from processor import JobProcessor
 
 # TODO: refactoring resolve circular import by factory
 # from converter import Converter
@@ -43,33 +42,6 @@ class UIProtocol(Protocol):
 
     def display_errors(self, errors: list):
         raise NotImplementedError
-
-
-class DummyUI:
-    def __init__(self):
-        self.converter = None
-
-    def run(self, converter) -> None:
-        print(f"DUMMY UI: RUN {converter}")
-
-    def setup(self) -> JobConfig:
-        print("DUMMY UI: SETUP")
-
-    def convert(self) -> None:
-        print("DUMMY UI: CONVERT")
-
-    def display_job_status(self, status):
-        print(f"DUMMY UI: display status {status}")
-
-    def display_job_result(self, result):
-        print(f"DUMMY UI: display result {result}")
-
-    def display_job_id(self, job_id):
-        print(f"DUMMY UI: display ID {job_id}")
-
-    def display_errors(self, errors: list):
-        for error in errors:
-            print(f"DUMMY UI: ERROR: {error}")
 
 
 def yes_no(message="Do you want to run convert[N/y]?: "):
@@ -320,8 +292,8 @@ class TkView:
 
 
 def main():
-    inter = ConverterInterfaceTk()
-    inter.view.run()
+    interface = ConverterInterfaceTk()
+    interface.view.run()
 
 
 if __name__ == '__main__':

@@ -55,7 +55,7 @@ class Converter:
 
         # save result file
         if result:
-            self.save(result)
+            self.save(result, self.config.path_to_save)
 
     def validate_path(self, path_to_file: str) -> bool:
         """validate path to file for converting"""
@@ -104,14 +104,9 @@ class Converter:
         self.ui.display_errors([str(error)])
 
     # TODO: maybe replace saver to converter
-    def save(self, file_path: Optional[Union[Path, str]]) -> None:
-        path = self.processor.save_file(file_path, self.config.path_to_save)
+    def save(
+            self, file_path: Optional[Union[Path, str]],
+            path_to_save: Optional[Union[Path, str]]) -> Path:
+        path = self.processor.save_file(file_path, path_to_save)
         self.ui.display_job_result(path)
-
-
-def main():
-    pass
-
-
-if __name__ == '__main__':
-    main()
+        return path

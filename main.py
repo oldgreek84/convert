@@ -4,10 +4,7 @@ except ImportError:
     def load_dotenv():
         pass
 
-from processor import (
-    JobProcessorRemote,
-    JobProcessorDummy,
-)
+from processor import JobProcessorRemote
 from ui import ConverterInterfaceCLI, ConverterInterfaceTk
 from worker import ThreadWorker
 from converter import Converter
