@@ -47,6 +47,9 @@ class Converter:
         return executor
 
     def _convert(self) -> None:
+        # validate config
+        self.validate_config()
+
         # send file to processor
         job_id = self.send_job()
 
@@ -57,23 +60,23 @@ class Converter:
         if result:
             self.save(result, self.config.path_to_save)
 
+    def validate_config(self) -> None:
+        if not self.config or not self.config.get_config():
+            raise ConvertError("Converter`s config was not set")
+
     def validate_path(self, path_to_file: str) -> bool:
         """validate path to file for converting"""
 
         if not os.path.isfile(path_to_file):
-            raise ValueError("invalid file path")
+            raise ValueError("Invalid file path")
         return True
 
     def get_file_path(self) -> str:
         return self.config.path_to_file
 
-    # TODO: realise functionality to add different converter formats
+    # TODO: implement functionality to add different converter formats
     def get_job_options(self) -> dict:
-        return {
-            "category": self.config.job_category,
-            "target": self.config.job_target,
-            "options": self.config.job_options,
-        }
+        return self.config.get_config()
 
     def send_job(self) -> str:
         """send job data to processor. Return job ID"""
@@ -82,6 +85,7 @@ class Converter:
         self.validate_path(path_to_file)
 
         options = self.get_job_options()
+        print(f"TEST: {options = }")
 
         with open(path_to_file, "rb") as file_data:
             job_id = self.processor.send_job_data(path_to_file, file_data, options)

@@ -27,6 +27,13 @@ class JobConfig:
     def job_options(self):
         return self.target.options
 
+    def get_config(self) -> dict:
+        return {
+            "category": self.job_category,
+            "target": self.job_target,
+            "options": self.job_options,
+        }
+
 
 class APIConfig:
     """Docstring for UrlConverter:."""
