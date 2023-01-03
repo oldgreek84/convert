@@ -39,7 +39,7 @@ class JobProcessor(ABC):
     def save_file(
             self,
             path_to_result: Optional[Union[str, Path]],
-            path_to_save: Optional[Union[str, Path]]) -> str:
+            path_to_save: Optional[Union[str, Path]]) -> Path:
         """save job result after processing and return path to file"""
 
 
@@ -79,7 +79,7 @@ class JobProcessorRemote(JobProcessor):
         }
         return json.dumps(data)
 
-    def _get_job_id_from_server(self, data: str) -> Tuple[str, str]:
+    def _get_job_id_from_server(self, options_data: str) -> Tuple[str, str]:
         """
         sends request to create remote job
         data: json string with parameters target and category
@@ -89,9 +89,10 @@ class JobProcessorRemote(JobProcessor):
         response = requests.post(
             self.api_config.url,
             headers=self.api_config.get_header("main_header"),
-            data=data
+            data=options_data,
+            timeout=10,
         )
-        data = response.json()
+        data: dict = response.json()
         return data["id"], data["server"]
 
     def _set_upload_url(self, work_id: str, server_url: str) -> str:
@@ -105,6 +106,7 @@ class JobProcessorRemote(JobProcessor):
             server_url,
             headers=self.api_config.get_header("cache_header"),
             files={"file": (path_to_file, file_data)},
+            timeout=10,
         )
 
         return response.json().get("completed")
@@ -114,7 +116,7 @@ class JobProcessorRemote(JobProcessor):
             self._status = self._get_job_status(job_id)
         return self._status
 
-    def _get_job_status(self, work_id: str) -> dict:
+    def _get_job_status(self, work_id: str) -> str:
         res = self._get_job_info(work_id)
         return res["status"]["code"]
 
@@ -135,6 +137,7 @@ class JobProcessorRemote(JobProcessor):
         response = requests.get(
             f"{self.api_config.url}/{work_id}",
             headers=self.api_config.get_header("main_header"),
+            timeout=10,
         )
 
         res = response.json()
@@ -146,17 +149,17 @@ class JobProcessorRemote(JobProcessor):
         if is_error:
             raise ProcessorError(f"ERROR: {self._get_error_info(data)}")
 
-    def _get_error_info(self, data: dict) -> Optional[Union[str, None]]:
+    def _get_error_info(self, data: dict) -> list[Optional[Union[str, None]]]:
         return [data["errors"] or data["status"]["code"]]
 
     # TODO: create SAVER class
     def save_file(
             self,
             path_to_result: Optional[Union[str, Path]],
-            path_to_save: Optional[Union[str, Path]]) -> str:
+            path_to_save: Optional[Union[str, Path]]) -> Path:
         return self._save_from_url(path_to_result, path_to_save)
 
-    def _save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> str:
+    def _save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> Path:
         """saves file form remote URL to directory"""
 
         filename = url.split("/")[-1]

@@ -4,7 +4,7 @@ from typing import Callable
 # TODO: create decorator to add handlers
 
 class Signal:
-    """class provide observer patern behaver"""
+    """class provide observer pattern behaver"""
 
     def __init__(self) -> None:
         self.handlers: list[Callable] = []

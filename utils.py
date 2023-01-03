@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-""" modul with spetials utils to works with application """
+""" module with spetials utils to works with application """
 
 import os
 import sys
 from functools import wraps
-from typing import Callable
+from typing import Callable, Optional, Union
 
 import requests
+
+
+class ParamsError(Exception):
+    """common error class for parsing params"""
 
 
 def coroutine(func):
@@ -21,7 +25,7 @@ def coroutine(func):
 
 def catcher(error_list=None):
     """ decorator catch all exception in function and
-    retun message with errors
+        return message with errors
     """
     def catcher_wrap(func: Callable):
 
@@ -31,7 +35,6 @@ def catcher(error_list=None):
                 func(*args, **kwargs)
             except Exception as ex:
                 errors = {"status": "error", "message": str(ex)}
-                print(f"CATCHER: {errors = }")
                 func.errors = errors
                 error_list.append(errors)
 
@@ -39,18 +42,18 @@ def catcher(error_list=None):
     return catcher_wrap
 
 
-def get_value(arg: str) -> str:
+def get_value(arg: str) -> Optional[Union[str, bool]]:
     """gets and returns next argument for command line"""
 
     indx = sys.argv.index(arg)
     try:
         res = sys.argv[indx + 1]
     except IndexError:
-        return {"error": "not found value"}
+        return False
     return res
 
 
-def get_path(file_name: str) -> str:
+def get_path(file_name: str) -> Optional[str]:
     """returns path of file if then exists or raise exception"""
 
     files = [x.name for x in os.scandir(os.path.curdir) if x.is_file()]
@@ -100,10 +103,6 @@ def save_data_from_responce_to_dir(
     with open(file_path, "wb") as opened_file:
         for part in response.iter_content(bufsize):
             opened_file.write(part)
-
-
-class ParamsError(Exception):
-    """common error class for parsing params"""
 
 
 if __name__ == "__main__":

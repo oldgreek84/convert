@@ -77,7 +77,7 @@ class ConverterInterfaceCLI:
         if yes_no():
             self.convert()
 
-    def setup(self) -> JobConfig:
+    def setup(self) -> Optional[Union[JobConfig, bool]]:
         try:
             args = self._get_params(sys.argv)
         except ParamsError:
@@ -86,7 +86,7 @@ class ConverterInterfaceCLI:
 
         return JobConfig(*args)
 
-    def _get_params(self, args: tuple) -> tuple:
+    def _get_params(self, args: list) -> tuple:
         if len(args) == 1:
             raise ParamsError
 
@@ -167,9 +167,9 @@ class ConverterInterfaceTk:
 
     def display_errors(self, errors: list) -> None:
         self.display_job_status("error")
-        errors = "\n".join(errors)
-        self.view.update_text(errors)
-        self.view.show_message(errors)
+        err_message = "\n".join(errors)
+        self.view.update_text(err_message)
+        self.view.show_message(err_message)
 
 
 class TkView:

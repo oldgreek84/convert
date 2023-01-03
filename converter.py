@@ -32,7 +32,7 @@ class Converter:
     def convert(self) -> None:
         """converts the data to needed format. Save converted file"""
 
-        # TODO: processing error handler if worker was not setted
+        # TODO: processing error handler if worker was not set
         try:
             executor = self.set_converter_executor()
             executor()

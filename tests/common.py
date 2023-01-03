@@ -2,7 +2,6 @@ from typing import Optional, Union, Any
 from pathlib import Path
 
 import requests
-from unittest import mock
 
 from processor import JobProcessor, ProcessorError
 from config import JobConfig
