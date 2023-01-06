@@ -1,16 +1,13 @@
-import sys
 import os
-
-from typing import Protocol, Any, Optional, Union
-from pathlib import Path
-
+import sys
 import tkinter as tk
 import tkinter.filedialog as fd
+from pathlib import Path
 from tkinter import ttk
+from typing import Any, Optional, Protocol, Union, runtime_checkable
 
-
-from utils import parse_command, get_path, ParamsError
-from config import Target, JobConfig
+from config import JobConfig, Target
+from utils import ParamsError, get_path, parse_command
 
 # TODO: refactoring resolve circular import by factory
 # from converter import Converter
@@ -18,6 +15,7 @@ from config import Target, JobConfig
 work_dir = os.path.abspath(__file__)
 
 
+@runtime_checkable
 class UIProtocol(Protocol):
     def run(self, converter) -> None:
         raise NotImplementedError
@@ -25,30 +23,27 @@ class UIProtocol(Protocol):
     def setup(self) -> JobConfig:
         raise NotImplementedError
 
-    def convert(self) -> None:
+    def convert(self, config: JobConfig) -> None:
         raise NotImplementedError
 
     def display_message(self, message: str) -> None:
         raise NotImplementedError
 
-    def display_job_status(self, status):
+    def display_job_status(self, status) -> None:
         raise NotImplementedError
 
-    def display_job_result(self, result):
+    def display_job_result(self, result) -> None:
         raise NotImplementedError
 
-    def display_job_id(self, job_id):
+    def display_job_id(self, job_id) -> None:
         raise NotImplementedError
 
-    def display_errors(self, errors: list):
+    def display_error(self, error: str) -> None:
         raise NotImplementedError
 
 
 def yes_no(message="Do you want to run convert[N/y]?: "):
-    res = input(message)
-    if res.lower() == "y":
-        return True
-    return False
+    return input(message).lower() == 'y'
 
 
 class ConverterInterfaceCLI:
@@ -60,22 +55,22 @@ class ConverterInterfaceCLI:
     -cat - [category] - category of formatting file (default "ebook")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.converter = None
 
-    def convert(self) -> None:
-        self.converter.convert()
+    def convert(self, config: JobConfig) -> None:
+        self.converter.convert(config)
 
     def run(self, converter) -> None:
         self.converter = converter
         try:
             config = self.setup()
-            self.converter.set_config(config)
         except Exception as ex:
-            self.display_errors([f"Something wrong with config {config}", f"{ex}"])
+            self.display_error(f"Something wrong: {ex}")
+            config = None
 
         if yes_no():
-            self.convert()
+            self.convert(config)
 
     def setup(self) -> Optional[Union[JobConfig, bool]]:
         try:
@@ -103,12 +98,12 @@ class ConverterInterfaceCLI:
 
         target_object = Target(working_target, working_category)
 
-        msg = f"\n{'=' * 80}\nPARAMS:\n\
-            {working_file_path = }\n\
-            {working_target = }\n\
-            {working_category = }\n\
-            {target_object = }\n\
-            {'=' * 80}"
+        msg = f"\n{'=' * 80}\nPARAMS:\
+                \n\t{working_file_path = }\
+                \n\t{working_target = }\
+                \n\t{working_category = }\
+                \n\t{target_object = }\
+                \n{'=' * 80}"
         self.display_message(msg)
         return target_object, working_file_path
 
@@ -124,10 +119,9 @@ class ConverterInterfaceCLI:
     def display_job_id(self, job_id):
         print(f">>> INTERFACE JOB ID: {job_id}")
 
-    def display_errors(self, errors: list):
+    def display_error(self, error: str):
         self.display_job_status("error")
-        for error in errors:
-            print(f">>> INTERFACE ERROR: {error}")
+        print(f">>> INTERFACE ERROR: {error}")
 
 
 class ConverterInterfaceTk:
@@ -144,15 +138,14 @@ class ConverterInterfaceTk:
         return JobConfig(*args)
 
     def convert(self) -> None:
-        self.converter.set_config(self.setup())
-        self.converter.convert()
+        self.converter.convert(self.setup())
 
     def _get_params(self) -> tuple[Target, Path]:
         target_object = Target(
-            self.view.get("target"),
-            self.view.get("category")
+            self.view.get_param("target"),
+            self.view.get_param("category")
         )
-        path_to_file = self.view.get("path_to_file")
+        path_to_file = self.view.get_param("path_to_file")
         return target_object, path_to_file
 
     def display_job_status(self, status: str) -> None:
@@ -165,11 +158,10 @@ class ConverterInterfaceTk:
     def display_job_id(self, job_id: str) -> None:
         self.view.update_text(job_id)
 
-    def display_errors(self, errors: list) -> None:
+    def display_error(self, error: str) -> None:
         self.display_job_status("error")
-        err_message = "\n".join(errors)
-        self.view.update_text(err_message)
-        self.view.show_message(err_message)
+        self.view.update_text(error)
+        self.view.show_message(error)
 
 
 class TkView:
@@ -221,6 +213,7 @@ class TkView:
             "<<ComboboxSelected>>",
             lambda event: self.set_data("category", self.list_box.get())
         )
+        self.set_data("category", self.list_box.get())
 
         self.list_box2 = ttk.Combobox(
             self.app,
@@ -233,6 +226,7 @@ class TkView:
             "<<ComboboxSelected>>",
             lambda event: self.set_data("target", self.list_box2.get())
         )
+        self.set_data("target", self.list_box2.get())
 
         # add status and info section
         self.result_txt = tk.Text(self.app, width=40, height=5, wrap=tk.WORD)
@@ -256,7 +250,6 @@ class TkView:
 
     def open_file(self):
         filetypes = (
-            ('book files', '*.mobi'),
             ('book files', '*.fb2'),
             ('text files', '*.txt'),
             ('All files', '*.*')
@@ -279,7 +272,7 @@ class TkView:
         self.status_field.delete(0.0, tk.END)
         self.status_field.insert(0.0, msg)
 
-    def get(self, key: str) -> Any:
+    def get_param(self, key: str) -> Any:
         return self._config.get(key)
 
     def show_message(self, message):

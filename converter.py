@@ -1,14 +1,13 @@
 import os
 import time
-
-from pathlib import Path
-from typing import Optional, Union, Callable
 from functools import partial
+from pathlib import Path
+from typing import Callable, Optional, Union
 
-from worker import WorkerProtocol
+from config import JobConfig
 from processor import JobProcessor
 from ui import UIProtocol
-from config import JobConfig
+from worker import WorkerProtocol
 
 
 class ConvertError(Exception):
@@ -26,18 +25,20 @@ class Converter:
         self.worker = worker
         self.config: JobConfig = None
 
-    def set_config(self, config: JobConfig) -> None:
-        self.config = config
-
-    def convert(self) -> None:
+    def convert(self, config: JobConfig) -> None:
         """converts the data to needed format. Save converted file"""
+
+        self.set_config(config)
 
         # TODO: processing error handler if worker was not set
         try:
             executor = self.set_converter_executor()
             executor()
         except Exception as ex:
-            self.ui.display_errors([f"Converter had an error: {ex}"])
+            self.error_handler(ex)
+
+    def set_config(self, config: JobConfig) -> None:
+        self.config = config
 
     def set_converter_executor(self) -> Callable:
         executor = self._convert
@@ -68,7 +69,7 @@ class Converter:
         """validate path to file for converting"""
 
         if not os.path.isfile(path_to_file):
-            raise ValueError("Invalid file path")
+            raise ConvertError("Invalid file path")
         return True
 
     def get_file_path(self) -> str:
@@ -105,7 +106,7 @@ class Converter:
         return self.processor.get_job_result(job_id)
 
     def error_handler(self, error: Exception) -> None:
-        self.ui.display_errors([str(error)])
+        self.ui.display_error(f"Converter got an error: {error}")
 
     # TODO: maybe replace saver to converter
     def save(
