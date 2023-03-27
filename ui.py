@@ -108,7 +108,7 @@ class ConverterInterfaceCLI:
         return target_object, working_file_path
 
     def display_message(self, message: str) -> None:
-        print(f" INTERFACE MESSAGE: {message}")
+        print(f">>> INTERFACE MESSAGE: {message}")
 
     def display_job_status(self, status):
         print(f">>> INTERFACE STATUS: {status}")

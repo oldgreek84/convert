@@ -19,7 +19,7 @@ class Converter:
             self,
             ui: UIProtocol,
             processor: JobProcessor,
-            worker: WorkerProtocol = None) -> None:
+            worker: Optional[WorkerProtocol] = None) -> None:
         self.ui = ui
         self.processor = processor
         self.worker = worker

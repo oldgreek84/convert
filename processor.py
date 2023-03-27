@@ -1,14 +1,13 @@
-import os
 import json
-
-from abc import abstractmethod, ABC
+import os
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Tuple, Any, Optional, Union
+from typing import Any, Optional, Tuple, Union
 
 import requests
 
-from utils import get_full_file_path, coroutine
 from config import APIConfig
+from utils import get_full_file_path
 
 
 class ProcessorError(Exception):
@@ -16,6 +15,7 @@ class ProcessorError(Exception):
 
 
 class JobProcessor(ABC):
+    @abstractmethod
     def __init__(self, *args, **kwargs) -> None:
         pass
 
@@ -80,9 +80,8 @@ class JobProcessorRemote(JobProcessor):
         return json.dumps(data)
 
     def _get_job_id_from_server(self, options_data: str) -> Tuple[str, str]:
-        """
-        sends request to create remote job
-        data: json string with parameters target and category
+        """ sends request to create remote job
+        options_data: json string with parameters target and category
         return: job server url and job id
         """
 
@@ -159,7 +158,11 @@ class JobProcessorRemote(JobProcessor):
             path_to_save: Optional[Union[str, Path]]) -> Path:
         return self._save_from_url(path_to_result, path_to_save)
 
-    def _save_from_url(self, url: str, sub_dir: str = os.path.curdir) -> Path:
+    def _save_from_url(
+        self,
+        url: Optional[Union[str, Path]],
+        sub_dir: Optional[Union[str, Path]] = os.path.curdir
+    ) -> Path:
         """saves file form remote URL to directory"""
 
         filename = url.split("/")[-1]
