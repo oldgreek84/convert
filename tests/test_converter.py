@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch, Mock
 
-from converter import Converter
+from converter import Converter, ConvertError
 from tests.common import DummyJobProcessor, DummyUI, DummyWorker
 
 
@@ -16,18 +16,18 @@ class ConverterTestCase(unittest.TestCase):
 
     def test_main_convert(self):
         with patch.object(type(self.converter), "_convert") as mocked:
-            self.converter.convert()
+            self.converter.convert("config")
         mocked.assert_called_once()
 
     def test_main_convert_result(self):
-        self.converter.config = Mock(path_to_save="path/to/save")
+        config = Mock(path_to_save="path/to/save")
         with \
                 patch.object(self.converter, "set_converter_executor") as mocked_executor,\
                 patch.object(self.converter, "send_job") as mocked_send,\
                 patch.object(self.converter, "get_job")as mocked_get,\
                 patch.object(self.converter, "save") as mocked_save:
             mocked_executor.return_value = self.converter._convert
-            self.converter.convert()
+            self.converter.convert(config)
         mocked_send.assert_called_once()
         mocked_get.assert_called_once()
         mocked_save.assert_called_once()
@@ -68,8 +68,8 @@ class ConverterTestCase(unittest.TestCase):
     def test_main_convert_with_exception(self):
         with patch.object(type(self.converter), "set_converter_executor") as mocked:
             mocked.side_effect = Exception("test except")
-            with patch.object(self.converter.ui, "display_errors") as mocked_ui:
-                self.converter.convert()
+            with patch.object(self.converter.ui, "display_error") as mocked_ui:
+                self.converter.convert("config")
         mocked_ui.assert_called_once()
 
     def test_get_convert_executor(self):
@@ -82,7 +82,7 @@ class ConverterTestCase(unittest.TestCase):
         self.assertTrue(executor)
 
     def test_validate_path(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConvertError):
             self.converter.validate_path("fake/path")
 
     def test_validate_with_error(self):
@@ -154,7 +154,7 @@ class ConverterTestCase(unittest.TestCase):
         self.assertEqual(res, "path/to/result")
 
     def test_error_handler(self):
-        with patch.object(self.converter.ui, "display_errors") as mocked:
+        with patch.object(self.converter.ui, "display_error") as mocked:
             self.converter.error_handler(Exception("test error"))
             mocked.assert_called_once()
 

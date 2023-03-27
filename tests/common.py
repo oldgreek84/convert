@@ -37,9 +37,8 @@ class DummyUI:
     def display_job_id(self, job_id):
         print(f"DUMMY UI: display ID {job_id}")
 
-    def display_errors(self, errors: list):
-        for error in errors:
-            print(f"DUMMY UI: ERROR: {error}")
+    def display_error(self, error: str):
+        print(f"DUMMY UI: ERROR: {error}")
 
 
 class DummyJobProcessor(JobProcessor):
@@ -85,18 +84,14 @@ class LocalTestJobProcessor(JobProcessor):
 
     def send_job_data(self, path_to_file: str, file_data: bytes, options: dict) -> str:
         # send pramas to server
-        print("--- PROCESSOR: Job was sent")
-        print(f"--- PROCESSOR: PARAMS:  {path_to_file = } {options = }")
         res = requests.post(f"{self.dummy_url}", json={"conversion": options})
         work_id = res.json()["id"]
         self._data["id"] = work_id
 
         # send data to server
-        print("--- PROCESSOR: Data was sent")
         res = requests.post(
             f"{self.dummy_url}/test-server/upload-file/test_ID",
             files={"file": file_data})
-        print(f"TEST DUMMY: {res.json()['completed'] = }")
         return work_id
 
     def get_job_status(self, job_id: str) -> str:
@@ -106,10 +101,7 @@ class LocalTestJobProcessor(JobProcessor):
 
     def _get_job_status(self, job_id: str = "test_ID") -> dict:
         res = self._get_converted_file_status_data(job_id)
-        status = res["status"]["code"]
-
-        print(f"TEST : {status = }")
-        return status
+        return res["status"]["code"]
 
     def get_job_result(self, job_id):
         if self.is_completed():
@@ -118,20 +110,14 @@ class LocalTestJobProcessor(JobProcessor):
 
     def _get_job_result(self, job_id: str = "test_ID"):
         res = self._get_converted_file_status_data(job_id)
-
-        result = res["info"][0]["uri"]
-
-        print(f"TEST : {result = }")
-        return result
+        return res["info"][0]["uri"]
 
     def _get_converted_file_status_data(self, job_id: str):
         response = requests.get(
             f"{self.dummy_url}/{job_id}",
         )
 
-        print(f"TEST:  {response.text = }")
         res = response.json()
-        print(f"TEST: {res = }")
         self._check_errors(res)
         return res
 
@@ -147,7 +133,6 @@ class LocalTestJobProcessor(JobProcessor):
             self,
             path_to_result: Optional[Union[str, Path]],
             path_to_save: Optional[Union[str, Path]]) -> str:
-        print(f"--- DUMMY --: file {path_to_result} was saved")
         full_path = f"path/to/{path_to_save}"
         self._data["full_path"] = full_path
         return full_path
