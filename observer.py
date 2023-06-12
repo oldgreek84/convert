@@ -1,10 +1,9 @@
-from typing import Callable
+from collections.abc import Callable
 
 
 # TODO: create decorator to add handlers
-
 class Signal:
-    """class provide observer pattern behaver"""
+    """class provide observer pattern behavior"""
 
     def __init__(self) -> None:
         self.handlers: list[Callable] = []

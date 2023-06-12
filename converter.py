@@ -1,8 +1,8 @@
 import os
 import time
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Callable, Optional, Union
 
 from config import JobConfig
 from processor import JobProcessor
@@ -11,23 +11,20 @@ from worker import WorkerProtocol
 
 
 class ConvertError(Exception):
-    """own converter error"""
+    """The special type of the converter error"""
 
 
 class Converter:
     def __init__(
-            self,
-            ui: UIProtocol,
-            processor: JobProcessor,
-            worker: Optional[WorkerProtocol] = None) -> None:
-        self.ui = ui
+        self, interface: UIProtocol, processor: JobProcessor, worker: WorkerProtocol | None = None
+    ) -> None:
+        self.interface = interface
         self.processor = processor
         self.worker = worker
         self.config: JobConfig = None
 
     def convert(self, config: JobConfig) -> None:
         """converts the data to needed format. Save converted file"""
-
         self.set_config(config)
 
         # TODO: processing error handler if worker was not set
@@ -67,7 +64,6 @@ class Converter:
 
     def validate_path(self, path_to_file: str) -> bool:
         """validate path to file for converting"""
-
         if not os.path.isfile(path_to_file):
             raise ConvertError("Invalid file path")
         return True
@@ -81,37 +77,32 @@ class Converter:
 
     def send_job(self) -> str:
         """send job data to processor. Return job ID"""
-
         path_to_file = self.get_file_path()
         self.validate_path(path_to_file)
 
         options = self.get_job_options()
-        print(f"TEST: {options = }")
 
         with open(path_to_file, "rb") as file_data:
             job_id = self.processor.send_job_data(path_to_file, file_data, options)
 
-        self.ui.display_job_id(job_id)
-        self.ui.display_job_status(self.processor.get_job_status(job_id))
+        self.interface.display_job_id(job_id)
+        self.interface.display_job_status(self.processor.get_job_status(job_id))
         return job_id
 
-    def get_job(self, job_id: str) -> Optional[Union[Path, str]]:
-        """ get job result from processor. Return path to converted file"""
-
+    def get_job(self, job_id: str) -> Path | str:
+        """get job result from processor. Return path to converted file"""
         while not self.processor.is_completed():
             time.sleep(3)
             status = self.processor.get_job_status(job_id)
-            self.ui.display_job_status(status)
+            self.interface.display_job_status(status)
 
         return self.processor.get_job_result(job_id)
 
     def error_handler(self, error: Exception) -> None:
-        self.ui.display_error(f"Converter got an error: {error}")
+        self.interface.display_error(f"Converter got an error: {error}")
 
     # TODO: maybe replace saver to converter
-    def save(
-            self, file_path: Optional[Union[Path, str]],
-            path_to_save: Optional[Union[Path, str]]) -> Path:
+    def save(self, file_path: Path | str, path_to_save: Path | str) -> Path:
         path = self.processor.save_file(file_path, path_to_save)
-        self.ui.display_job_result(path)
+        self.interface.display_job_result(path)
         return path

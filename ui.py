@@ -1,10 +1,10 @@
-import os
+import pathlib
 import sys
 import tkinter as tk
 import tkinter.filedialog as fd
 from pathlib import Path
 from tkinter import ttk
-from typing import Any, Optional, Protocol, Union, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from config import JobConfig, Target
 from utils import ParamsError, get_path, parse_command
@@ -12,7 +12,15 @@ from utils import ParamsError, get_path, parse_command
 # TODO: refactoring resolve circular import by factory
 # from converter import Converter
 
-work_dir = os.path.abspath(__file__)
+work_dir = pathlib.Path(__file__)
+
+DOCSTRING = """
+command needs:
+-path - full/path/to/file
+-name - file_name in current directory
+-t - [target] - string of file format(default "mobi")
+-cat - [category] - category of formatting file (default "ebook")
+"""
 
 
 @runtime_checkable
@@ -20,7 +28,7 @@ class UIProtocol(Protocol):
     def run(self, converter) -> None:
         raise NotImplementedError
 
-    def setup(self) -> JobConfig:
+    def setup(self) -> JobConfig | bool:
         raise NotImplementedError
 
     def convert(self, config: JobConfig) -> None:
@@ -29,13 +37,13 @@ class UIProtocol(Protocol):
     def display_message(self, message: str) -> None:
         raise NotImplementedError
 
-    def display_job_status(self, status) -> None:
+    def display_job_status(self, status: str) -> None:
         raise NotImplementedError
 
-    def display_job_result(self, result) -> None:
+    def display_job_result(self, result: Path | str) -> None:
         raise NotImplementedError
 
-    def display_job_id(self, job_id) -> None:
+    def display_job_id(self, job_id: str) -> None:
         raise NotImplementedError
 
     def display_error(self, error: str) -> None:
@@ -43,17 +51,11 @@ class UIProtocol(Protocol):
 
 
 def yes_no(message="Do you want to run convert[N/y]?: "):
-    return input(message).lower() == 'y'
+    return input(message).lower() in ["y", "yes"]
 
 
 class ConverterInterfaceCLI:
-    docstring = """
-    command needs:
-    -path - full/path/to/file
-    -name - file_name in current directory
-    -t - [target] - string of file format(default "mobi")
-    -cat - [category] - category of formatting file (default "ebook")
-    """
+    docstring = DOCSTRING
 
     def __init__(self) -> None:
         self.converter = None
@@ -65,14 +67,13 @@ class ConverterInterfaceCLI:
         self.converter = converter
         try:
             config = self.setup()
+            if yes_no():
+                self.convert(config)
         except Exception as ex:
             self.display_error(f"Something wrong: {ex}")
-            config = None
 
-        if yes_no():
-            self.convert(config)
 
-    def setup(self) -> Optional[Union[JobConfig, bool]]:
+    def setup(self) -> JobConfig | bool:
         try:
             args = self._get_params(sys.argv)
         except ParamsError:
@@ -110,16 +111,16 @@ class ConverterInterfaceCLI:
     def display_message(self, message: str) -> None:
         print(f">>> INTERFACE MESSAGE: {message}")
 
-    def display_job_status(self, status):
+    def display_job_status(self, status: str) -> None:
         print(f">>> INTERFACE STATUS: {status}")
 
-    def display_job_result(self, result):
+    def display_job_result(self, result: Path | str) -> None:
         print(f">>> INTERFACE RESULT: {result}")
 
-    def display_job_id(self, job_id):
+    def display_job_id(self, job_id: str) -> None:
         print(f">>> INTERFACE JOB ID: {job_id}")
 
-    def display_error(self, error: str):
+    def display_error(self, error: str) -> None:
         self.display_job_status("error")
         print(f">>> INTERFACE ERROR: {error}")
 
@@ -141,17 +142,14 @@ class ConverterInterfaceTk:
         self.converter.convert(self.setup())
 
     def _get_params(self) -> tuple[Target, Path]:
-        target_object = Target(
-            self.view.get_param("target"),
-            self.view.get_param("category")
-        )
+        target_object = Target(self.view.get_param("target"), self.view.get_param("category"))
         path_to_file = self.view.get_param("path_to_file")
         return target_object, path_to_file
 
     def display_job_status(self, status: str) -> None:
         self.view.set_status(status)
 
-    def display_job_result(self, result: Optional[Union[Path, str]]) -> None:
+    def display_job_result(self, result: Path | str) -> None:
         self.view.update_text(result)
         self.view.show_message(result)
 
@@ -165,22 +163,16 @@ class ConverterInterfaceTk:
 
 
 class TkView:
-    JOB_VARIANTS = ("ebook", "video")
-    FORMAT_VARIANTS = ("mobi", "pdf")
-
-    docstring = """
-    -path - full/path/to/file
-    -name - file_name in current directory
-    -t - [target] - string of file format(default "mobi")
-    -cat - [category] - category of formatting file (default "ebook")
-    """
+    job_variants = ("ebook", "video")
+    format_variants = ("mobi", "pdf")
+    docstring = DOCSTRING
 
     def __init__(self, interface):
         self.interface = interface
         self.root = tk.Tk()
 
-        self.root.title('gui')
-        self.root.geometry('600x300')
+        self.root.title("gui")
+        self.root.geometry("600x300")
         self.app = tk.Frame(self.root)
         self._config: dict[str] = {}
 
@@ -188,7 +180,7 @@ class TkView:
         self.app.grid()
 
         # add buttons section
-        self.convert_btn = tk.Button(self.app, text='Convert', command=self.interface_convert)
+        self.convert_btn = tk.Button(self.app, text="Convert", command=self.interface_convert)
         self.convert_btn.grid(column=0, row=0)
 
         self.open_file_btn = tk.Button(self.app, text="Open file", command=self.open_file)
@@ -198,20 +190,16 @@ class TkView:
         self.quit_btn.grid(column=5, row=0)
 
         # add options section
-        self.list_box_value = tk.Variable(value=self.JOB_VARIANTS)
-        self.list_box2_value = tk.Variable(value=self.FORMAT_VARIANTS)
+        self.list_box_value = tk.Variable(value=self.job_variants)
+        self.list_box2_value = tk.Variable(value=self.format_variants)
 
         self.list_box = ttk.Combobox(
-            self.app,
-            textvariable=self.list_box_value,
-            state="readonly",
-            values=self.JOB_VARIANTS
+            self.app, textvariable=self.list_box_value, state="readonly", values=self.job_variants
         )
         self.list_box.current(0)
         self.list_box.grid(column=0, row=1, columnspan=2)
         self.list_box.bind(
-            "<<ComboboxSelected>>",
-            lambda event: self.set_data("category", self.list_box.get())
+            "<<ComboboxSelected>>", lambda event: self.set_data("category", self.list_box.get())
         )
         self.set_data("category", self.list_box.get())
 
@@ -219,12 +207,12 @@ class TkView:
             self.app,
             textvariable=self.list_box2_value,
             state="readonly",
-            values=self.FORMAT_VARIANTS)
+            values=self.format_variants,
+        )
         self.list_box2.current(0)
         self.list_box2.grid(column=2, row=1)
         self.list_box2.bind(
-            "<<ComboboxSelected>>",
-            lambda event: self.set_data("target", self.list_box2.get())
+            "<<ComboboxSelected>>", lambda event: self.set_data("target", self.list_box2.get())
         )
         self.set_data("target", self.list_box2.get())
 
@@ -249,16 +237,9 @@ class TkView:
         return True
 
     def open_file(self):
-        filetypes = (
-            ('book files', '*.fb2'),
-            ('text files', '*.txt'),
-            ('All files', '*.*')
-        )
+        filetypes = (("book files", "*.fb2"), ("text files", "*.txt"), ("All files", "*.*"))
 
-        filename = fd.askopenfilename(
-            title='Open a file',
-            initialdir=work_dir,
-            filetypes=filetypes)
+        filename = fd.askopenfilename(title="Open a file", initialdir=work_dir, filetypes=filetypes)
 
         self._config["path_to_file"] = filename
 
@@ -289,5 +270,5 @@ def main():
     interface.view.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

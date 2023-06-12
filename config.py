@@ -47,8 +47,7 @@ class APIConfig:
                 "content-type": "application/json",
                 "x-oc-api-key": self.token,
             },
-            "cache_header": {
-                "cache-control": "no-cache", "x-oc-api-key": self.token},
+            "cache_header": {"cache-control": "no-cache", "x-oc-api-key": self.token},
         }
 
     def get_header(self, header_key: str):
