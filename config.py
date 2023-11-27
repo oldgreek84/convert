@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass, field
 
@@ -36,9 +38,7 @@ class JobConfig:
 
 
 class APIConfig:
-    """Docstring for UrlConverter:."""
-
-    def __init__(self, token: str = None, url: str = None):
+    def __init__(self, token: str | None = None, url: str | None = None):
         self.token = token or os.environ.get("API_KEY")
         self.url = url or os.environ.get("CONVERTER_URL")
         self.headers = {

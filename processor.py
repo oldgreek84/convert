@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import json
 import os
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any
+from typing import Any, TextIO, TYPE_CHECKING
 
 import requests
 from config import APIConfig
 from utils import get_full_file_path
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class ProcessorError(Exception):
@@ -15,15 +19,11 @@ class ProcessorError(Exception):
 
 class JobProcessor(ABC):
     @abstractmethod
-    def __init__(self, *args, **kwargs) -> None:
-        pass
-
-    @abstractmethod
     def is_completed(self) -> bool:
         """return True if job is completed"""
 
     @abstractmethod
-    def send_job_data(self, path_to_file: str, file_data: bytes, options: dict) -> str:
+    def send_job_data(self, path_to_file: str, file_data: TextIO, options: dict) -> str:
         """send job data for processing. Return job ID"""
 
     @abstractmethod
@@ -51,7 +51,7 @@ class JobProcessorRemote(JobProcessor):
     def is_completed(self) -> bool:
         return self._status == "completed"
 
-    def send_job_data(self, path_to_file: str, file_data: bytes, options: dict) -> str:
+    def send_job_data(self, path_to_file: str, file_data: TextIO, options: dict) -> str:
         # get server`s options for convert
         work_id, server_url = self._get_job_id_from_server(self._set_data_options(options))
         url_upload = self._set_upload_url(work_id, server_url)
@@ -88,11 +88,16 @@ class JobProcessorRemote(JobProcessor):
         data: dict = response.json()
         return data["id"], data["server"]
 
-    def _set_upload_url(self, work_id: str, server_url: str) -> str:
+    @staticmethod
+    def _set_upload_url(work_id: str, server_url: str) -> str:
         return f"{server_url}/upload-file/{work_id}"
 
-    def _send_file_to_server(self, server_url: str, path_to_file: str, file_data: bytes) -> dict:
-        """sends bytes file data to remote API"""
+    def _send_file_to_server(
+            self,
+            server_url: str,
+            path_to_file: str,
+            file_data: TextIO) -> dict:
+        """sends file data to remote API"""
         response = requests.post(
             server_url,
             headers=self.api_config.get_header("cache_header"),
@@ -137,9 +142,11 @@ class JobProcessorRemote(JobProcessor):
     def _check_errors(self, data: dict) -> None:
         is_error = data["status"]["code"] == "error" or data["errors"]
         if is_error:
-            raise ProcessorError(f"ERROR: {self._get_error_info(data)}")
+            msg = f"ERROR: {self._get_error_info(data)}"
+            raise ProcessorError(msg)
 
-    def _get_error_info(self, data: dict) -> list[str | None]:
+    @staticmethod
+    def _get_error_info(data: dict) -> list[str | None]:
         return [data["errors"] or data["status"]["code"]]
 
     # TODO: create SAVER class
@@ -154,8 +161,9 @@ class JobProcessorRemote(JobProcessor):
         self.save_data_from_response_to_dir(str(full_path), response)
         return full_path
 
+    @staticmethod
     def save_data_from_response_to_dir(
-        self, file_path: str, response: requests.Response, bufsize: int = 1024
+        file_path: str, response: requests.Response, bufsize: int = 1024
     ):
         """save file from response object to dir"""
         with open(file_path, "wb") as opened_file:

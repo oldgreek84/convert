@@ -8,7 +8,7 @@ from tests.common import DummyJobProcessor, DummyUI, DummyWorker
 
 class ConverterTestCase(unittest.TestCase):
     def setUp(self):
-        self.converter = Converter(ui=DummyUI(), processor=DummyJobProcessor())
+        self.converter = Converter(interface=DummyUI(), processor=DummyJobProcessor())
 
     def test_set_config(self):
         self.converter.set_config("config")
@@ -68,7 +68,7 @@ class ConverterTestCase(unittest.TestCase):
     def test_main_convert_with_exception(self):
         with patch.object(type(self.converter), "set_converter_executor") as mocked:
             mocked.side_effect = Exception("test except")
-            with patch.object(self.converter.ui, "display_error") as mocked_ui:
+            with patch.object(self.converter.interface, "display_error") as mocked_ui:
                 self.converter.convert("config")
         mocked_ui.assert_called_once()
 
@@ -154,7 +154,7 @@ class ConverterTestCase(unittest.TestCase):
         self.assertEqual(res, "path/to/result")
 
     def test_error_handler(self):
-        with patch.object(self.converter.ui, "display_error") as mocked:
+        with patch.object(self.converter.interface, "display_error") as mocked:
             self.converter.error_handler(Exception("test error"))
             mocked.assert_called_once()
 

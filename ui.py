@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib
 import sys
 import tkinter as tk
@@ -72,7 +74,6 @@ class ConverterInterfaceCLI:
         except Exception as ex:
             self.display_error(f"Something wrong: {ex}")
 
-
     def setup(self) -> JobConfig | bool:
         try:
             args = self._get_params(sys.argv)
@@ -142,7 +143,8 @@ class ConverterInterfaceTk:
         self.converter.convert(self.setup())
 
     def _get_params(self) -> tuple[Target, Path]:
-        target_object = Target(self.view.get_param("target"), self.view.get_param("category"))
+        target_object = Target(
+            self.view.get_param("target"), self.view.get_param("category"))
         path_to_file = self.view.get_param("path_to_file")
         return target_object, path_to_file
 
@@ -194,12 +196,14 @@ class TkView:
         self.list_box2_value = tk.Variable(value=self.format_variants)
 
         self.list_box = ttk.Combobox(
-            self.app, textvariable=self.list_box_value, state="readonly", values=self.job_variants
+            self.app,
+            textvariable=self.list_box_value, state="readonly", values=self.job_variants
         )
         self.list_box.current(0)
         self.list_box.grid(column=0, row=1, columnspan=2)
         self.list_box.bind(
-            "<<ComboboxSelected>>", lambda event: self.set_data("category", self.list_box.get())
+            "<<ComboboxSelected>>",
+            lambda event: self.set_data("category", self.list_box.get())
         )
         self.set_data("category", self.list_box.get())
 
@@ -212,7 +216,8 @@ class TkView:
         self.list_box2.current(0)
         self.list_box2.grid(column=2, row=1)
         self.list_box2.bind(
-            "<<ComboboxSelected>>", lambda event: self.set_data("target", self.list_box2.get())
+            "<<ComboboxSelected>>",
+            lambda event: self.set_data("target", self.list_box2.get())
         )
         self.set_data("target", self.list_box2.get())
 
@@ -239,7 +244,8 @@ class TkView:
     def open_file(self):
         filetypes = (("book files", "*.fb2"), ("text files", "*.txt"), ("All files", "*.*"))
 
-        filename = fd.askopenfilename(title="Open a file", initialdir=work_dir, filetypes=filetypes)
+        filename = fd.askopenfilename(
+            title="Open a file", initialdir=work_dir, filetypes=filetypes)
 
         self._config["path_to_file"] = filename
 

@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
-"""module with spetials utils to works with application"""
+from __future__ import annotations
 
 import os
 import pathlib
 import sys
-from collections.abc import Callable
 from functools import wraps
 
 import requests
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ParamsError(Exception):

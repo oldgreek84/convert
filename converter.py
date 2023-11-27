@@ -1,4 +1,4 @@
-import os
+import pathlib
 import time
 from collections.abc import Callable
 from functools import partial
@@ -16,7 +16,10 @@ class ConvertError(Exception):
 
 class Converter:
     def __init__(
-        self, interface: UIProtocol, processor: JobProcessor, worker: WorkerProtocol | None = None
+        self,
+        interface: UIProtocol,
+        processor: JobProcessor,
+        worker: WorkerProtocol | None = None,
     ) -> None:
         self.interface = interface
         self.processor = processor
@@ -60,12 +63,15 @@ class Converter:
 
     def validate_config(self) -> None:
         if not self.config or not self.config.get_config():
-            raise ConvertError("Converter`s config was not set")
+            error_msg = "Converter`s config was not set"
+            raise ConvertError(error_msg)
 
-    def validate_path(self, path_to_file: str) -> bool:
+    @staticmethod
+    def validate_path(path_to_file: str) -> bool:
         """validate path to file for converting"""
-        if not os.path.isfile(path_to_file):
-            raise ConvertError("Invalid file path")
+        if not pathlib.Path(path_to_file).is_file():
+            msg = "Invalid file path"
+            raise ConvertError(msg)
         return True
 
     def get_file_path(self) -> str:
@@ -82,6 +88,7 @@ class Converter:
 
         options = self.get_job_options()
 
+        # TODO: provide usage encoding options
         with open(path_to_file, "rb") as file_data:
             job_id = self.processor.send_job_data(path_to_file, file_data, options)
 
