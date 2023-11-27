@@ -11,6 +11,10 @@ Test project conver e-book files by default with remote converter API
 - enter to directory with project
 
 - run and work with applicaton:
+---
+if you want to use converter with GUI.
+---
+
 ```bash
-python converter.py
+python main.py
 ```

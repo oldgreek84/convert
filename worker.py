@@ -1,17 +1,15 @@
-import time
-import threading
 import queue
-from concurrent.futures import ThreadPoolExecutor
-
-from functools import wraps
-
-from typing import Generator, Protocol, Callable, Any
+import threading
+import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Generator
+from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
+from typing import Any, Protocol
 
 import requests
-
-from utils import coroutine
 from observer import Signal
+from utils import coroutine
 
 _DEFAULT_POOL = ThreadPoolExecutor()
 
@@ -30,23 +28,22 @@ def threaded(func, daemon=False):
     """decorator for long-time operation"""
 
     def wrapped_f(wrapped_q, *args, **kwargs):
-        """ this function calls the decorated function and puts the
+        """this function calls the decorated function and puts the
         result in a queue
         """
         ret = func(*args, **kwargs)
         wrapped_q.put(ret)
 
     def wrap(*args, **kwargs):
-        """ this is the function returned from the decorator. It fires off
+        """this is the function returned from the decorator. It fires off
         wrapped_f in a new thread and returns the thread object with
         the result queue attached
         """
-
         queue_q = queue.Queue()
 
-        thread = threading.Thread(target=wrapped_f,
-                                  args=(queue_q, ) + args,
-                                  kwargs=kwargs)
+        thread = threading.Thread(
+            target=wrapped_f, args=(queue_q, *args), kwargs=kwargs
+        )
         thread.daemon = daemon
         thread.start()
         thread.result_queue = queue
@@ -70,7 +67,6 @@ class WorkerProtocol(Protocol):
 
 
 class WorkerInterface(ABC):
-
     def __init__(self, job, *args, **kwargs):
         self.job = job
         self.args = args
@@ -90,7 +86,7 @@ class WorkerInterface(ABC):
 
 
 class ThreadWorker:
-    """ worker was implemented by threading module"""
+    """worker was implemented by threading module"""
 
     def __init__(self) -> None:
         self._thread = None
@@ -108,9 +104,7 @@ class ThreadWorker:
 
     def execute(self, func, *args, **kwargs) -> None:
         self._thread = threading.Thread(
-            target=self.wrapper,
-            args=(func, *args),
-            kwargs=kwargs
+            target=self.wrapper, args=(func, *args), kwargs=kwargs
         )
         self._thread.start()
 
@@ -123,7 +117,6 @@ class ThreadWorker:
 
 
 class Worker(WorkerInterface):
-
     def is_completed(self):
         return self._status in ["error", "completed"]
 
@@ -147,13 +140,13 @@ class Worker(WorkerInterface):
     def get_some_cor(self):
         while True:
             _, resp_status = self.get_response_status()
-            _ = (yield resp_status)
+            _ = yield resp_status
 
     @coroutine
     def get_status_cor(self):
         try:
             while True:
-                run = (yield)
+                run = yield
                 print(f"1: {run = }")
                 if run:
                     res, resp_status = self.job_process(self.args, self.kwargs)
@@ -162,7 +155,7 @@ class Worker(WorkerInterface):
                     yield res, resp_status
                     print(f"2: {run = }")
                     print("------------------------------")
-                    self._status = res.json()['message']
+                    self._status = res.json()["message"]
         except GeneratorExit:
             print("closing.........")
 
@@ -206,7 +199,7 @@ class Worker(WorkerInterface):
     def waiter_cor(self, main=None):
         try:
             while True:
-                status = (yield)
+                status = yield
                 # status = next(next_cor)
                 print(f"{type(status) = }")
                 print(f"waiter: {status = }")
@@ -232,7 +225,7 @@ class Worker(WorkerInterface):
         resp_status = "wait"
         try:
             while True:
-                check = (yield)
+                check = yield
                 print(f"checker: {check = }")
                 if check:
                     time.sleep(3)
@@ -245,7 +238,6 @@ class Worker(WorkerInterface):
 
 
 class Worker2(WorkerInterface):
-
     def is_completed(self):
         return self._status in ["error", "completed"]
 
@@ -269,13 +261,13 @@ class Worker2(WorkerInterface):
     def get_some_cor(self):
         while True:
             _, resp_status = self.get_response_status()
-            _ = (yield resp_status)
+            _ = yield resp_status
 
     @coroutine
     def get_status_cor(self):
         try:
             while True:
-                run = (yield)
+                run = yield
                 print(f"1: {run = }")
                 if run:
                     res, resp_status = self.job(*self.args, **self.kwargs)
@@ -283,13 +275,12 @@ class Worker2(WorkerInterface):
                     print(f"response: {res = } {resp_status = }")
                     print(f"2: {run = }")
                     print("------------------------------")
-                    self._status = res.json()['message']
+                    self._status = res.json()["message"]
         except GeneratorExit:
             print("closing.........")
 
 
 class Worker3(WorkerInterface):
-
     def is_completed(self):
         return self._status in ["error", "completed"]
 
@@ -333,7 +324,7 @@ class Worker3(WorkerInterface):
     def waiter_cor(self, main=None):
         try:
             while True:
-                status = (yield)
+                status = yield
                 # status = next(next_cor)
                 print(f"{type(status) = }")
                 print(f"waiter: {status = }")
@@ -359,7 +350,7 @@ class Worker3(WorkerInterface):
         resp_status = "wait"
         try:
             while True:
-                check = (yield)
+                check = yield
                 print(f"checker: {check = }")
                 if check:
                     time.sleep(3)
@@ -371,7 +362,7 @@ class Worker3(WorkerInterface):
             print("check coroutine closing...")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     def get_response_status(some):
         res = requests.get("http://localhost:5000/", json={"some": some})

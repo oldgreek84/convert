@@ -4,12 +4,8 @@ except ImportError:
     def load_dotenv():
         pass
 
-from processor import (
-    JobProcessorRemote,
-    JobProcessorDummy,
-)
-from config import JobConfig
-from ui import ConverterInterfaceCLI, ConverterInterfaceTk, DummyUI
+from processor import JobProcessorRemote
+from ui import ConverterInterfaceCLI, ConverterInterfaceTk
 from worker import ThreadWorker
 from converter import Converter
 
@@ -17,11 +13,11 @@ load_dotenv()
 
 
 def main() -> None:
-    gui = ConverterInterfaceCLI()
+    interface = ConverterInterfaceCLI()
     worker = ThreadWorker()
     processor = JobProcessorRemote()
-    converter = Converter(gui, processor, worker)
-    gui.run(converter)
+    converter = Converter(interface, processor, worker)
+    interface.run(converter)
 
 
 if __name__ == "__main__":

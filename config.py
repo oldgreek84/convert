@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass, field
 
@@ -23,11 +25,20 @@ class JobConfig:
     def job_category(self):
         return self.target.category
 
+    @property
+    def job_options(self):
+        return self.target.options
+
+    def get_config(self) -> dict:
+        return {
+            "category": self.job_category,
+            "target": self.job_target,
+            "options": self.job_options,
+        }
+
 
 class APIConfig:
-    """Docstring for UrlConverter:."""
-
-    def __init__(self, token: str = None, url: str = None):
+    def __init__(self, token: str | None = None, url: str | None = None):
         self.token = token or os.environ.get("API_KEY")
         self.url = url or os.environ.get("CONVERTER_URL")
         self.headers = {
@@ -36,8 +47,7 @@ class APIConfig:
                 "content-type": "application/json",
                 "x-oc-api-key": self.token,
             },
-            "cache_header": {
-                "cache-control": "no-cache", "x-oc-api-key": self.token},
+            "cache_header": {"cache-control": "no-cache", "x-oc-api-key": self.token},
         }
 
     def get_header(self, header_key: str):
