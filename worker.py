@@ -52,18 +52,22 @@ def threaded(func, daemon=False):
     return wrap
 
 
+class ThreadError(Exception):
+    pass
+
+
 class WorkerProtocol(Protocol):
     def is_completed(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def get_result(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def execute(self, func, *args, **kwargs):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def set_error_handler(self, handler: Callable) -> None:
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class WorkerInterface(ABC):
@@ -86,14 +90,16 @@ class WorkerInterface(ABC):
 
 
 class ThreadWorker:
-    """worker was implemented by threading module"""
+    """Worker is implemented by threading module"""
 
     def __init__(self) -> None:
-        self._thread = None
+        self._thread: threading.Thread | None = None
         self._result = None
         self._error = Signal()
 
     def is_completed(self) -> bool:
+        if self._thread is None:
+            raise ThreadError
         return not self._thread.is_alive()
 
     def get_result(self) -> Any:
@@ -131,7 +137,6 @@ class Worker(WorkerInterface):
             if not until_done:
                 break
 
-            print(f"----- ST: {self._status}")
             if self.is_completed():
                 main_cor.close()
                 break
@@ -147,14 +152,9 @@ class Worker(WorkerInterface):
         try:
             while True:
                 run = yield
-                print(f"1: {run = }")
                 if run:
                     res, resp_status = self.job_process(self.args, self.kwargs)
-                    print("------------------------------")
-                    print(f"response: {res = } {resp_status = }")
                     yield res, resp_status
-                    print(f"2: {run = }")
-                    print("------------------------------")
                     self._status = res.json()["message"]
         except GeneratorExit:
             print("closing.........")
@@ -175,7 +175,6 @@ class Worker(WorkerInterface):
     def sum_cor(self, checker):
         try:
             res = yield from checker
-            print("-----", res)
         except Exception as ex:
             print(f"{ex = }")
 
@@ -200,136 +199,9 @@ class Worker(WorkerInterface):
         try:
             while True:
                 status = yield
-                # status = next(next_cor)
                 print(f"{type(status) = }")
                 print(f"waiter: {status = }")
                 if isinstance(status, Generator):
-                    print("IF--------INSTANCE-")
-                    main = status
-                self._status = status
-
-                if status in ["completed", "error"]:
-                    # checker.close()
-                    if main is not None:
-                        main.close()
-                    return
-
-                if main is not None:
-                    main.send(True)
-
-        except GeneratorExit:
-            print("waiter coroutine closing...")
-
-    @coroutine
-    def check_cor(self, waiter):
-        resp_status = "wait"
-        try:
-            while True:
-                check = yield
-                print(f"checker: {check = }")
-                if check:
-                    time.sleep(3)
-                    _, resp_status = self.get_response_status()
-                    # waiter_cor.send(resp_status)
-                    # yield resp_status
-                    waiter.send(resp_status)
-        except GeneratorExit:
-            print("check coroutine closing...")
-
-
-class Worker2(WorkerInterface):
-    def is_completed(self):
-        return self._status in ["error", "completed"]
-
-    def execute(self):
-        self.producer(self.get_status_cor())
-
-    def producer(self, main_cor, until_done=True):
-        while True:
-            time.sleep(3)
-            main_cor.send(True)
-
-            if not until_done:
-                break
-
-            print(f"----- ST: {self._status}")
-            if self.is_completed():
-                main_cor.close()
-                break
-
-    @coroutine
-    def get_some_cor(self):
-        while True:
-            _, resp_status = self.get_response_status()
-            _ = yield resp_status
-
-    @coroutine
-    def get_status_cor(self):
-        try:
-            while True:
-                run = yield
-                print(f"1: {run = }")
-                if run:
-                    res, resp_status = self.job(*self.args, **self.kwargs)
-                    print("------------------------------")
-                    print(f"response: {res = } {resp_status = }")
-                    print(f"2: {run = }")
-                    print("------------------------------")
-                    self._status = res.json()["message"]
-        except GeneratorExit:
-            print("closing.........")
-
-
-class Worker3(WorkerInterface):
-    def is_completed(self):
-        return self._status in ["error", "completed"]
-
-    def execute(self):
-        checker = self.checker()
-        sum_cor = self.sum_cor(checker)
-        self.next_producer(sum_cor)
-        return sum_cor
-
-    def next_producer(self, main_cor, waiter=None):
-        try:
-            main_cor.send(True)
-        except StopIteration:
-            print("closing....")
-
-    @coroutine
-    def sum_cor(self, checker):
-        try:
-            res = yield from checker
-            print("-----", res)
-        except Exception as ex:
-            print(f"{ex = }")
-
-    def checker(self):
-        resp_status = False
-        while True:
-            try:
-                time.sleep(3)
-                res, resp_status = self.job(*self.args, **self.kwargs)
-                print(f"{res = } {resp_status = }")
-            except StopIteration:
-                break
-            else:
-                self._status = resp_status
-                if resp_status in ["completed", "error"]:
-                    print("COMPLETED")
-                    break
-        return resp_status
-
-    @coroutine
-    def waiter_cor(self, main=None):
-        try:
-            while True:
-                status = yield
-                # status = next(next_cor)
-                print(f"{type(status) = }")
-                print(f"waiter: {status = }")
-                if isinstance(status, Generator):
-                    print("IF--------INSTANCE-")
                     main = status
                 self._status = status
 
@@ -363,7 +235,6 @@ class Worker3(WorkerInterface):
 
 
 if __name__ == "__main__":
-
     def get_response_status(some):
         res = requests.get("http://localhost:5000/", json={"some": some})
         return res, res.json()["status"]["code"]

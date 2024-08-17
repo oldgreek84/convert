@@ -3,7 +3,7 @@ from pathlib import Path
 
 import requests
 
-from processor import JobProcessor, ProcessorError
+from processor import JobProcessorInterface, ProcessorError
 from config import JobConfig
 
 
@@ -41,7 +41,7 @@ class DummyUI:
         print(f"DUMMY UI: ERROR: {error}")
 
 
-class DummyJobProcessor(JobProcessor):
+class DummyJobProcessor(JobProcessorInterface):
     def is_completed(self) -> bool:
         """return True if job is completed"""
 
@@ -61,7 +61,7 @@ class DummyJobProcessor(JobProcessor):
         """save job result after processing and return path to file"""
 
 
-class LocalTestJobProcessor(JobProcessor):
+class LocalTestJobProcessor(JobProcessorInterface):
     dummy_msg = None
     dummy_url = "http://localhost:5000"
     dummy_response = {
