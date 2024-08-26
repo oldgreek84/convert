@@ -1,0 +1,2 @@
+def func():
+    """test func"""
