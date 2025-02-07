@@ -5,11 +5,12 @@ import subprocess
 from pathlib import Path, PosixPath
 from typing import Generator, Union
 
-from processors import JobProcessorInterface, ProcessorError
+from processors import ProcessorError
+from interfaces.processor_interface import JobProcessor
 
 
-class LocalProcessor(JobProcessorInterface):
-    """Test to convert via OTHER cli app"""
+class LocalProcessor:
+    """Dump job processor to convert via OTHER CLI app"""
 
     def __init__(self) -> None:
         self._status = "ready"
@@ -26,14 +27,13 @@ class LocalProcessor(JobProcessorInterface):
         if options is None:
             options = {}
 
-        # setup commad params to processing job
+        # setup command params to processing job
         params = self._prepare_command(filename, options)
         command, file_to_save = params["command"], params["file_to_save"]
 
         try:
             # if send errors to pipe we will have traceback data in process
             # can use it in debug mode
-            # process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             process = subprocess.Popen(command, stdout=subprocess.PIPE)
         except Exception as ex:
             raise ProcessorError(f"Error in send: {ex}") from ex
@@ -45,8 +45,8 @@ class LocalProcessor(JobProcessorInterface):
         """Prepare list with string command to user inner application"""
         command = ["ebook-convert", filename]
 
-        processing_targer = options["target"]
-        file_to_save = f"{filename}.{processing_targer}"
+        processing_target = options["target"]
+        file_to_save = f"{filename}.{processing_target}"
 
         other_options = self._prepare_other_options(options["options"])
         command.extend([file_to_save, *other_options])
@@ -67,9 +67,8 @@ class LocalProcessor(JobProcessorInterface):
         while True:
             line = process.stdout.readline() if process.stdout is not None else None
             if not line:
-                self._status = "completed"
+                self.set_status("completed")
                 break
-            self._status = "processing"
             yield self._status, line.decode().strip()
 
     def get_job_result(self, job_id: int) -> str:

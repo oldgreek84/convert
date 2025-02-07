@@ -4,6 +4,8 @@ import tkinter as tk
 import tkinter.filedialog as fd
 from tkinter import scrolledtext
 from tkinter import ttk
+import ttkbootstrap as ttkb
+from ttkbootstrap.constants import LEFT, RIGHT, TOP, BOTTOM
 
 from pathlib import Path
 from typing import Any
@@ -69,72 +71,85 @@ class TkView:
 
     def __init__(self, interface: ConverterInterfaceTk) -> None:
         self.interface = interface
-        self.root = tk.Tk()
+        # self.root = tk.Tk()
+        self.root = ttkb.Window(title="Converter", themename="superhero")
 
-        self.root.title("gui")
-        self.root.geometry("600x300")
+        # self.root.title("gui")
+        # self.root.geometry("600x300")
         self.app = tk.Frame(self.root)
         self._config: dict[str, Any] = {}
 
     def create_view(self) -> None:
-        self.app.grid(padx=10, pady=10)
+        bt1 = ttkb.Button(self.root, text="Convert", bootstyle="success")
+        bt1.pack(side=LEFT, padx=10, pady=10)
 
-        # Add FIRST row of elements
-        # add field to choose a file
-        self.file_field = tk.Text(self.app, width=20, height=1)
-        self.file_field.grid(column=1, row=0)
+        bt2 = ttkb.Button(self.root, text="Open File", bootstyle="info")
+        bt2.pack(side=LEFT, padx=10, pady=10)
 
-        # add buttons section
-        self.open_file_btn = tk.Button(self.app, text="Open file", command=self.open_file)
-        self.open_file_btn.grid(column=0, row=0)
+        bt3 = ttkb.Button(self.root, text="Quit", bootstyle="danger", command=self.root.destroy)
+        bt3.pack(side=LEFT, padx=10, pady=10)
 
-        self.convert_btn = tk.Button(self.app, text="Convert", command=self.interface_convert)
-        self.convert_btn.grid(column=2, row=0)
+        self.status_field = ttkb.Text(self.root, width=10, height=1)
+        self.status_field.pack(side=BOTTOM, padx=10, pady=10)
 
-        self.quit_btn = tk.Button(self.app, text="Quit", command=self.root.destroy)
-        self.quit_btn.grid(column=3, row=0)
-
-        # Add SECOND row of elements
-        # add status field
-        self.label_status = tk.Label(self.app, text="Status:")
-        self.label_status.grid(column=0, row=1)
-        self.status_field = tk.Text(self.app, width=20, height=1)
-        self.status_field.grid(column=1, row=1, columnspan=3)
-
-        # ADD THIRD row of elements
-        # add options section
-        self.list_box_value = tk.Variable(value=self.job_variants)
-        self.list_box2_value = tk.Variable(value=self.format_variants)
-
-        self.list_box = ttk.Combobox(
-            self.app, textvariable=self.list_box_value, state="readonly", values=self.job_variants
-        )
-        self.list_box.current(0)
-        self.list_box.grid(column=0, row=3, columnspan=2)
-        self.list_box.bind(
-            "<<ComboboxSelected>>", lambda event: self.set_data("category", self.list_box.get())
-        )
-        self.set_data("category", self.list_box.get())
-
-        self.list_box2 = ttk.Combobox(
-            self.app,
-            textvariable=self.list_box2_value,
-            state="readonly",
-            values=self.format_variants,
-        )
-        self.list_box2.current(0)
-        self.list_box2.grid(column=2, row=3)
-        self.list_box2.bind(
-            "<<ComboboxSelected>>", lambda event: self.set_data("target", self.list_box2.get())
-        )
-        self.set_data("target", self.list_box2.get())
-
-        # ADD LAST row of elements
-        # add result area to show common info
-        self.result_txt = scrolledtext.ScrolledText(
-            self.app, width=60, heigh=10, font=("Times New Roman", 12)
-        )
-        self.result_txt.grid(row=11, column=0, columnspan=4)
+        # self.app.grid(padx=10, pady=10)
+        #
+        # # Add FIRST row of elements
+        # # add field to choose a file
+        # self.file_field = tk.Text(self.app, width=20, height=1)
+        # self.file_field.grid(column=1, row=0)
+        #
+        # # add buttons section
+        # self.open_file_btn = tk.Button(self.app, text="Open file", command=self.open_file)
+        # self.open_file_btn.grid(column=0, row=0)
+        #
+        # self.convert_btn = tk.Button(self.app, text="Convert", command=self.interface_convert)
+        # self.convert_btn.grid(column=2, row=0)
+        #
+        # self.quit_btn = tk.Button(self.app, text="Quit", command=self.root.destroy)
+        # self.quit_btn.grid(column=3, row=0)
+        #
+        # # Add SECOND row of elements
+        # # add status field
+        # self.label_status = tk.Label(self.app, text="Status:")
+        # self.label_status.grid(column=0, row=1)
+        # self.status_field = tk.Text(self.app, width=20, height=1)
+        # self.status_field.grid(column=1, row=1, columnspan=3)
+        #
+        # # ADD THIRD row of elements
+        # # add options section
+        # self.list_box_value = tk.Variable(value=self.job_variants)
+        # self.list_box2_value = tk.Variable(value=self.format_variants)
+        #
+        # self.list_box = ttk.Combobox(
+        #     self.app, textvariable=self.list_box_value, state="readonly", values=self.job_variants
+        # )
+        # self.list_box.current(0)
+        # self.list_box.grid(column=0, row=3, columnspan=2)
+        # self.list_box.bind(
+        #     "<<ComboboxSelected>>", lambda event: self.set_data("category", self.list_box.get())
+        # )
+        # self.set_data("category", self.list_box.get())
+        #
+        # self.list_box2 = ttk.Combobox(
+        #     self.app,
+        #     textvariable=self.list_box2_value,
+        #     state="readonly",
+        #     values=self.format_variants,
+        # )
+        # self.list_box2.current(0)
+        # self.list_box2.grid(column=2, row=3)
+        # self.list_box2.bind(
+        #     "<<ComboboxSelected>>", lambda event: self.set_data("target", self.list_box2.get())
+        # )
+        # self.set_data("target", self.list_box2.get())
+        #
+        # # ADD LAST row of elements
+        # # add result area to show common info
+        # self.result_txt = scrolledtext.ScrolledText(
+        #     self.app, width=60, heigh=10, font=("Times New Roman", 12)
+        # )
+        # self.result_txt.grid(row=11, column=0, columnspan=4)
 
     def set_data(self, key: Any, value: Any) -> None:
         self._config[key] = value

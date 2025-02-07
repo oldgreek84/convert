@@ -1,4 +1,3 @@
-import time
 from unittest import TestCase
 
 
@@ -7,5 +6,5 @@ class TestUI(TestCase):
         super().setUp()
 
     def test_one(self):
-        time.sleep(3)
+        # NOTE: wrong test to run assertion
         self.assertEqual(1, 2)

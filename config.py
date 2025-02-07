@@ -4,6 +4,10 @@ import os
 from dataclasses import dataclass, field
 
 
+class ParamsError(Exception):
+    """Common error class for parsing params"""
+
+
 @dataclass
 class Target:
     target: str

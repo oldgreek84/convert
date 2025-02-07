@@ -1,20 +1,24 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PosixPath
-from typing import Any, Union
+from typing import Any, Union, TYPE_CHECKING
 
 from config import JobConfig as Config
-from interfaces import UIProtocol
-from processors import JobProcessorInterface
-from worker import WorkerProtocol
+
+from interfaces.ui_interface import UIProtocol
+from interfaces.processor_interface import JobProcessor
+from interfaces.worker_interface import Worker
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ConvertError(Exception):
     """The special type of the converter error"""
 
 
+# TODO: make processing statuses of processor more common
 class Converter:
     """Class which make the main business logic to convert one file format to other.
 
@@ -29,8 +33,8 @@ class Converter:
     def __init__(
         self,
         interface: UIProtocol,
-        processor: JobProcessorInterface,
-        worker: WorkerProtocol | None = None,
+        processor: JobProcessor,
+        worker: Worker | None = None,
     ) -> None:
         self.interface = interface
         self.processor = processor
@@ -102,7 +106,6 @@ class Converter:
         job_id = self.processor.send_job(path_to_file, options)
 
         # show job ID on interface
-        # self.interface.display_job_id(job_id)
         self.interface.display_common_info(f"Job ID: {job_id}")
 
         # show one time job status on interface at start
@@ -112,6 +115,8 @@ class Converter:
 
     def get_result(self, job_id: int) -> str:
         """get job result from processor. Return path to converted file"""
+        self.processor.set_status("processing")
+
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)

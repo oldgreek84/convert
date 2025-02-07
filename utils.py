@@ -12,10 +12,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class ParamsError(Exception):
-    """common error class for parsing params"""
-
-
 def coroutine(func: Callable):
     """decorator for auto init coroutine generator"""
 
@@ -82,7 +78,7 @@ def save_from_url(url: str, sub_dir: str = os.path.curdir) -> Union[str, Path, P
     filename = url.split("/")[-1]
     full_path = get_full_file_path(filename, sub_dir)
     response = requests.get(url, stream=True)
-    save_data_from_responce_to_dir(full_path, response)
+    save_data_from_response_to_dir(full_path, response)
     return full_path
 
 
@@ -94,7 +90,7 @@ def get_full_file_path(filename: str, sub_dir: str | Path) -> Union[str, Path, P
     return main_path / filename
 
 
-def save_data_from_responce_to_dir(
+def save_data_from_response_to_dir(
     file_path: str | Path, response: requests.Response, bufsize: int = 1024
 ) -> None:
     """save file from response object to dir"""
@@ -111,4 +107,4 @@ if __name__ == "__main__":
         print(get_path(__file__))
 
     resp = requests.get("http://www.google.com")
-    save_data_from_responce_to_dir(get_full_file_path("some.txt", "book"), resp)
+    save_data_from_response_to_dir(get_full_file_path("some.txt", "book"), resp)

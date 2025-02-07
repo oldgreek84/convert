@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 # TODO: create decorator to add handlers
 class Signal:
-    """class provide observer pattern behavior"""
+    """Provide observer pattern behavior"""
 
     def __init__(self) -> None:
         self.handlers: list[Callable] = []

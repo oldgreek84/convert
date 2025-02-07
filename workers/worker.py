@@ -1,14 +1,13 @@
 import queue
 import threading
 import time
-from abc import ABC, abstractmethod
+import requests
 from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
-from typing import Any, Protocol
+from typing import Any
 
-import requests
-from observer import Signal
+from workers.observer import Signal
 from utils import coroutine
 
 _DEFAULT_POOL = ThreadPoolExecutor()
@@ -56,39 +55,6 @@ class ThreadError(Exception):
     pass
 
 
-class WorkerProtocol(Protocol):
-    def is_completed(self):
-        raise NotImplementedError
-
-    def get_result(self):
-        raise NotImplementedError
-
-    def execute(self, func, *args, **kwargs):
-        raise NotImplementedError
-
-    def set_error_handler(self, handler: Callable) -> None:
-        raise NotImplementedError
-
-
-class WorkerInterface(ABC):
-    def __init__(self, job, *args, **kwargs):
-        self.job = job
-        self.args = args
-        self.kwargs = kwargs
-        self._status = None
-
-    @abstractmethod
-    def execute(self):
-        pass
-
-    @abstractmethod
-    def is_completed(self):
-        pass
-
-    def get_status(self):
-        return self._status
-
-
 class ThreadWorker:
     """Worker is implemented by threading module"""
 
@@ -108,13 +74,13 @@ class ThreadWorker:
     def set_error_handler(self, handler: Callable) -> None:
         self._error.connect(handler)
 
-    def execute(self, func, *args, **kwargs) -> None:
+    def execute(self, func: Callable, *args, **kwargs) -> None:
         self._thread = threading.Thread(
             target=self.wrapper, args=(func, *args), kwargs=kwargs
         )
         self._thread.start()
 
-    def wrapper(self, func, *args, **kwargs) -> None:
+    def wrapper(self, func: Callable, *args, **kwargs) -> None:
         try:
             result = func(*args, **kwargs)
             self._result = result
@@ -122,7 +88,7 @@ class ThreadWorker:
             self._error.emit(ex)
 
 
-class Worker(WorkerInterface):
+class WorkerCoroutine:
     def is_completed(self):
         return self._status in ["error", "completed"]
 

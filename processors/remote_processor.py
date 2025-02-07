@@ -8,16 +8,20 @@ from typing import TextIO, Generator
 
 import requests
 from config import APIConfig
-from processors import JobProcessorInterface, ProcessorError
-from utils import get_full_file_path, save_data_from_responce_to_dir
+from processors import ProcessorError
+from interfaces.processor_interface import JobProcessor
+from utils import get_full_file_path, save_data_from_response_to_dir
 
 PROCESSOR_TIMEOUT = 3
 
 
-class JobProcessorRemote(JobProcessorInterface):
+class JobProcessorRemote:
     def __init__(self) -> None:
         self.api_config = APIConfig()
         self._status = "ready"
+
+    def set_status(self, status: str) -> None:
+        self._status = status
 
     def send_job(self, filename: str, options: None | dict = None) -> int:
         """Method to send data to processing and return job ID"""
@@ -31,7 +35,7 @@ class JobProcessorRemote(JobProcessorInterface):
         while not self.is_completed():
             time.sleep(PROCESSOR_TIMEOUT)
             status = self._get_job_status(job_id)
-            self._status = status["code"]
+            self.set_status(status["code"])
             yield self._status, status["info"]
 
     def is_completed(self) -> bool:
@@ -47,7 +51,7 @@ class JobProcessorRemote(JobProcessorInterface):
         return job_id
 
     def _set_data_options(self, options: dict) -> str:
-        """return jsonify convert options"""
+        """return json-like object of converter options"""
         data = {
             "conversion": [
                 {
@@ -134,5 +138,5 @@ class JobProcessorRemote(JobProcessorInterface):
         filename = url.split("/")[-1] if url else ""
         full_path = get_full_file_path(filename, sub_dir)
         response = requests.get(url, stream=True)
-        save_data_from_responce_to_dir(full_path, response)
+        save_data_from_response_to_dir(full_path, response)
         return full_path

@@ -74,6 +74,9 @@ class ProcessorOnDocker(LocalProcessor):
         except StopIteration:
             pass
 
+    def set_status(self, status: str) -> None:
+        self._status = status
+
     def get_job_result(self, job_id: int) -> str:
         """get job data by job ID after processing and return it"""
         try:

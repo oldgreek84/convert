@@ -3,8 +3,10 @@ from pathlib import Path
 
 import requests
 
-from processor import JobProcessorInterface, ProcessorError
+from processors import ProcessorError
+from interfaces.processor_interface import JobProcessor
 from config import JobConfig
+from converter import Converter
 
 
 class DummyWorker:
@@ -19,29 +21,33 @@ class DummyUI:
     def __init__(self):
         self.converter = None
 
-    def run(self, converter) -> None:
+    def run(self, converter: Converter) -> None:
         print(f"DUMMY UI: RUN {converter}")
 
-    def setup(self) -> JobConfig:
+    def setup(self) -> JobConfig | bool:
         print("DUMMY UI: SETUP")
+        return JobConfig("test")
 
-    def convert(self) -> None:
+    def convert(self, config: JobConfig) -> None:
         print("DUMMY UI: CONVERT")
 
-    def display_job_status(self, status):
+    def display_job_status(self, status: str) -> None:
         print(f"DUMMY UI: display status {status}")
 
-    def display_job_result(self, result):
+    def display_job_result(self, result: Union[Path, str]) -> None:
         print(f"DUMMY UI: display result {result}")
 
-    def display_job_id(self, job_id):
+    def display_job_id(self, job_id: str) -> None:
         print(f"DUMMY UI: display ID {job_id}")
 
-    def display_error(self, error: str):
-        print(f"DUMMY UI: ERROR: {error}")
+    def display_common_info(self, message: str, status: str | None = None) -> None:
+        print(f"DUMMY UI: display common info {message} {status}")
+
+    def display_error(self, error: str) -> None:
+        raise NotImplementedError
 
 
-class DummyJobProcessor(JobProcessorInterface):
+class DummyJobProcessor:
     def is_completed(self) -> bool:
         """return True if job is completed"""
 
@@ -61,7 +67,7 @@ class DummyJobProcessor(JobProcessorInterface):
         """save job result after processing and return path to file"""
 
 
-class LocalTestJobProcessor(JobProcessorInterface):
+class LocalTestJobProcessor:
     dummy_msg = None
     dummy_url = "http://localhost:5000"
     dummy_response = {
