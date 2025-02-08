@@ -18,6 +18,7 @@ class ConvertError(Exception):
     """The special type of the converter error"""
 
 
+# TODO: make status as Enum
 # TODO: make processing statuses of processor more common
 class Converter:
     """Class which make the main business logic to convert one file format to other.
@@ -40,6 +41,10 @@ class Converter:
         self.processor = processor
         self.worker = worker
         self.config: Any[None, Config] = None
+
+    def get_status(self) -> str:
+        "Return current status of processor"
+        return self.processor.get_status()
 
     def convert(self, config: Config) -> None:
         """converts the data to needed format. Save converted file"""

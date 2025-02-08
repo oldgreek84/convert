@@ -10,6 +10,9 @@ class JobProcessor(Protocol):
     """
     Class provide possibility to send and processing data.
     """
+    def get_status(self) -> str:
+        """return status of processor"""
+
     def set_status(self, status: str) -> None:
         """set status of processor"""
 

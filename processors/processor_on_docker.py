@@ -31,6 +31,9 @@ class ProcessorOnDocker(LocalProcessor):
         self.client = init_container()
         self.containers: dict[int, tuple] = {}
 
+    def get_status(self) -> str:
+        return self._status
+
     def send_job(self, filename: str, options: None | dict = None) -> int:
         if options is None:
             options = {}
