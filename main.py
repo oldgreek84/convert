@@ -24,7 +24,8 @@ load_dotenv()
 
 
 def main() -> None:
-    interface = ConverterInterfaceCLI()
+    # interface = ConverterInterfaceCLI()
+    interface = ConverterInterfaceTk()
     worker = ThreadWorker()
     processor = ProcessorOnDocker()
 

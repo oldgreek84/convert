@@ -32,7 +32,7 @@ class ConverterInterfaceTk:
     """User interface with WM is written by TK python library."""
 
     def __init__(self) -> None:
-        self.view = TkView(self)
+        self.view: TkView = TkView(self)
 
     def run(self, converter: Converter) -> None:
         self.converter = converter
@@ -40,7 +40,8 @@ class ConverterInterfaceTk:
 
     def setup(self) -> Config:
         args = self._get_params()
-        return Config(*args)
+        self.config = Config(*args)
+        return self.config
 
     def convert(self, config: Config) -> None:
         self.converter.convert(config)
@@ -49,6 +50,9 @@ class ConverterInterfaceTk:
         target_object = Target(self.view.get_param("target"), self.view.get_param("category"))
         path_to_file = self.view.get_param("path_to_file")
         return target_object, path_to_file
+
+    def get_config(self):
+        return self.config
 
     def display_job_status(self, status: str) -> None:
         self.view.set_status(status)
@@ -60,7 +64,8 @@ class ConverterInterfaceTk:
 
     def display_job_result(self, result: Path | str) -> None:
         self.view.add_text_message(result)
-        self.view.show_message(result)
+        with open(result, "rb") as file:
+            tkthread.call_nosync(self.view.processing_result, result, file.read())
 
     def display_job_id(self, job_id: str) -> None:
         self.view.update_text_message(job_id)
@@ -74,21 +79,24 @@ class ConverterInterfaceTk:
 class TkView:
     def __init__(self, interface: ConverterInterfaceTk) -> None:
         self.interface = interface
-        self.root = ttkb.Window(title="Simple Converter", themename="superhero")
+        self.root = ttkb.Window(title="Simple Converter", themename="darkly")
         self.root.geometry("800x550")
         self._config: dict[str, Any] = {}
 
-    def set_convert_direction_from(self, event):
+    def bind_convert_direction_from(self, event):
         current_val = self.selection_from.get()
         default = "mobi"
         list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
         self.selection_to.set(list_of_possible[0])
 
-    def set_convert_direction_to(self, event):
+    def bind_convert_direction_to(self, event):
         current_val = self.selection_to.get()
         default = "fb2"
         list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
         self.selection_from.set(list_of_possible[0])
+
+    def bind_open_file_tap(self, event):
+        self.open_file()
 
     def get_status(self):
         print(self.interface.converter.get_status())
@@ -115,12 +123,12 @@ class TkView:
         self.selection_from = ttkb.Combobox(self.frame2, bootstyle="info", values=options["from"])
         self.selection_from.grid(column=1, row=0, padx=10)
         self.selection_from.current(0)
-        self.selection_from.bind("<<ComboboxSelected>>", self.set_convert_direction_from)
+        self.selection_from.bind("<<ComboboxSelected>>", self.bind_convert_direction_from)
 
         self.selection_to = ttkb.Combobox(self.frame2, bootstyle="info", values=options["to"])
         self.selection_to.grid(column=2, row=0, padx=10)
         self.selection_to.current(0)
-        self.selection_to.bind("<<ComboboxSelected>>", self.set_convert_direction_to)
+        self.selection_to.bind("<<ComboboxSelected>>", self.bind_convert_direction_to)
 
         # SET SECTION TWO
         # add buttons
@@ -132,9 +140,10 @@ class TkView:
         )
         button_open_file.grid(row=0, column=1, padx=10)
 
+        # add field to show/select file to convert
         self.file_field = tk.Text(self.frame1, width=20, height=1)
         self.file_field.grid(column=2, row=0, padx=10)
-        self.file_field.bind("<Button-1>", self.open_file_bind)
+        self.file_field.bind("<Button-1>", lambda event: self.open_file())
 
         button_convert = ttkb.Button(
             self.frame1,
@@ -148,9 +157,6 @@ class TkView:
             self.frame1, text="Quit", bootstyle="danger", command=self.root.destroy
         )
         button_quit.grid(row=0, column=4, padx=10)
-
-        bt_status = ttkb.Button(self.frame1, text="Get status", command=self.download_result)
-        bt_status.grid(row=0, column=5, padx=10)
 
         # SET SECTION FOUR
         # add status field
@@ -173,37 +179,41 @@ class TkView:
         self._config[key] = value
 
     def set_config(self):
-        self.set_data("path_to_file", self.file_field.get("0.0", "end").strip('\n'))
+        self.set_data("path_to_file", self.file_field.get("0.0", "end").strip("\n"))
         self.set_data("category", "ebook")
         self.set_data("target", self.selection_to.get())
 
     def interface_convert(self) -> bool:
         """Run convert processing in UI"""
+        self.update_text_message("")
         self.set_config()
         config = self.interface.setup()
         self.progress_bar.start()
         self.interface.convert(config)
         return True
 
-    def processing_error(self, error):
+    def processing_error(self, error: str) -> None:
         self.add_text_message(error)
         self.progress_bar.stop()
 
-    def open_file_bind(self, event):
-        self.open_file()
+    def processing_result(self, result: Path, content: bytes):
+        self.progress_bar.stop()
+        self.download_result(result.name, content)
 
     def open_file(self) -> None:
+        self.file_field.delete(0.0, "end")
         filetypes = (("Ebook files", f"*.{self.selection_from.get()}"), ("All files", "*.*"))
         filename = fd.askopenfilename(title="Open a file", initialdir=work_dir, filetypes=filetypes)
         self.file_field.insert(0.0, filename)
 
-    def download_result(self):
-        converted_file_content = b"some"
+    def download_result(self, filename: str, converted_file_content: bytes) -> None:
         file_path = fd.asksaveasfilename(
-                defaultextension=f".{self.selection_to.get()}",
-                filetypes=[("Ebook files", f"*.{self.selection_to.get()}"), ("All Files", "*.*")],
-                title="Save Converted eBook"
-            )
+            initialfile=filename,
+            initialdir=".",
+            defaultextension=f".{self.selection_to.get()}",
+            filetypes=[("Ebook files", f"*.{self.selection_to.get()}"), ("All Files", "*.*")],
+            title="Save Converted eBook",
+        )
 
         if not file_path:
             return
@@ -237,6 +247,7 @@ class TkView:
     def show_message(self, message: str, message_type="show_info") -> None:
         """Show message in popup window"""
         dialog_window = getattr(Messagebox, message_type)
+        print(f"---- SH :{message}")
         dialog_window(title="Converter Info", message=message)
 
     def run(self) -> None:
