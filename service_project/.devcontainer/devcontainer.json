@@ -1,0 +1,9 @@
+{
+  "name": "fastpi-backend-dev",
+  "dockerComposeFile": [
+    "../docker-compose.yml" // the docker compose file that we want to run
+  ],
+  "service": "backend", // The service in docker-compose.yml that we want vs code to use as a dev containers
+  "shutdownAction": "stopCompose",
+  "workspaceFolder": "."
+}
