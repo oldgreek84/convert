@@ -1,18 +1,25 @@
-[tool.poetry]
+[project]
 name = "convert"
-version = "0.1.3"
-description = "Convert ebook to different formats"
-authors = ["skip"]
+version = "0.2.0"
+description = "Ebook converter which allow to convert files."
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.13"
+dependencies = [
+    "certifi==2024.7.4",
+    "charset-normalizer==3.3.2",
+    "docker==7.1.0",
+    "idna==3.7",
+    "pytest>=8.3.4",
+    "python-dotenv==0.20.0",
+    "requests==2.32.3",
+    "tkthread>=0.5.2",
+    "ttkbootstrap>=1.10.1",
+    "urllib3==2.2.2",
+]
 
 [tool.mypy]
 ignore_missing_imports = true
 install_types = true
+
+[tool.ruff.format]
+quote-style = "double"

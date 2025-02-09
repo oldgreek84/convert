@@ -1,6 +1,7 @@
-## Remote converter
+## Simple converter
 
-Test project conver e-book files by default with remote converter API
+Convert e-book files by default with different type of processors.
+Use different types of UI.
 
 #### Work with application
 
@@ -10,10 +11,7 @@ Test project conver e-book files by default with remote converter API
 
 - enter to directory with project
 
-- run and work with applicaton:
----
-if you want to use converter with GUI.
----
+- run and work with application:
 
 ```bash
 python main.py

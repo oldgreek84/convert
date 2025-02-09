@@ -27,7 +27,6 @@ CONVERTER_FORMATS_MAPPING = {
 }
 
 
-# TODO: add button on interface to upload results
 class ConverterInterfaceTk:
     """User interface with WM is written by TK python library."""
 
@@ -247,7 +246,6 @@ class TkView:
     def show_message(self, message: str, message_type="show_info") -> None:
         """Show message in popup window"""
         dialog_window = getattr(Messagebox, message_type)
-        print(f"---- SH :{message}")
         dialog_window(title="Converter Info", message=message)
 
     def run(self) -> None:

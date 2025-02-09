@@ -2,7 +2,9 @@ certifi==2024.7.4
 charset-normalizer==3.3.2
 docker==7.1.0
 idna==3.7
+pillow==11.1.0
 python-dotenv==0.20.0
 requests==2.32.3
+tkthread==0.5.2
+ttkbootstrap==1.10.1
 urllib3==2.2.2
-ttkbootstrap

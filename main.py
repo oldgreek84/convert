@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 try:
     from dotenv import load_dotenv
 except ImportError as err:
-    logger.warning("dotenv module is not installed in your system")
+    logger.warning("Where is issue: dotenv module is not installed in your system")
     msg = "Where is not package in your system."
     raise ImportError(msg) from err
 
@@ -24,7 +24,6 @@ load_dotenv()
 
 
 def main() -> None:
-    # interface = ConverterInterfaceCLI()
     interface = ConverterInterfaceTk()
     worker = ThreadWorker()
     processor = ProcessorOnDocker()
