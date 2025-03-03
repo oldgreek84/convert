@@ -16,6 +16,7 @@ PROCESSOR_TIMEOUT = 3
 
 
 class JobProcessorRemote:
+    """Processor use remote API for convert files."""
     def __init__(self) -> None:
         self.api_config = APIConfig()
         self._status = "ready"

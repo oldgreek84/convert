@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path, PosixPath
 from typing import Generator, Union
 
 from processors import ProcessorError
-from interfaces.processor_interface import JobProcessor
 
 
 class LocalProcessor:
-    """Dump job processor to convert via OTHER CLI app"""
+    """Job processor which user local installed application called "ebook-convert"
+    to convert via OTHER CLI app"""
 
     def __init__(self) -> None:
         self._status = "ready"
@@ -84,11 +83,15 @@ class LocalProcessor:
             raise ProcessorError(f"ERROR IN RESULTS {process.stderr or ''}")
         return result
 
-    def save_file(self, path_to_result: str, path_to_save: str | Path) -> Union[str, Path, PosixPath]:
+    def save_file(
+        self, path_to_result: str, path_to_save: str | Path
+    ) -> Union[str, Path, PosixPath]:
         """save job result after processing and return path to file"""
         return self._resolve_path(path_to_result, path_to_save)
 
-    def _resolve_path(self, path_to_result: str, destenation_dir: str | Path) -> Union[str, Path, PosixPath]:
+    def _resolve_path(
+        self, path_to_result: str, destenation_dir: str | Path
+    ) -> Union[str, Path, PosixPath]:
         source_path = Path(path_to_result)
         destenation_path = Path(destenation_dir)
 

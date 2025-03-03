@@ -18,6 +18,12 @@ class ConvertError(Exception):
     """The special type of the converter error"""
 
 
+
+# TODO: maybe make save the result private and return as result the bytes instead of link to file
+# because each processor can have different type of result link. Example:
+# /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
+# https://www16.online-convert.com/dl/web7/download-file/8d8cd6a8-eb1d-4171-afa3-ee447036fbf0/Mystetstvo_liubovi.mobi
+#
 # TODO: make status as Enum
 # TODO: make processing statuses of processor more common
 class Converter:
@@ -43,11 +49,11 @@ class Converter:
         self.config: Any[None, Config] = None
 
     def get_status(self) -> str:
-        "Return current status of processor"
+        "Return current status of processor."
         return self.processor.get_status()
 
     def convert(self, config: Config) -> None:
-        """converts the data to needed format. Save converted file"""
+        """Run processing the data to needed format."""
         self.set_config(config)
 
         executor = self.set_converter_executor()
@@ -57,9 +63,11 @@ class Converter:
             self.error_handler(ex)
 
     def set_config(self, config: Config) -> None:
+        """Set converter configuration."""
         self.config = config
 
     def set_converter_executor(self) -> Callable:
+        """Return Callable object to processing main flow."""
         executor = self._convert
         if self.worker:
             executor = partial(self.worker.execute, self._convert)
@@ -75,12 +83,14 @@ class Converter:
 
         # check processing result and get it path
         result = self.get_result(job_id)
+        print(f"-----R :{result}")
 
         # save result file
         if result:
             self.save(result, self.config.path_to_save)
 
     def validate_config(self) -> None:
+        """Run different type of covert validation. Raise ConvertError in case of issues."""
         if not self.config or not self.config.get_config():
             error_msg = "Converter`s config was not set"
             raise ConvertError(error_msg)
@@ -94,10 +104,12 @@ class Converter:
         return True
 
     def get_file_path(self) -> str:
+        """Return string path to target (file need to be converted)."""
         return self.config.path_to_file
 
     # TODO: implement functionality to add different converter formats
     def get_job_options(self) -> dict:
+        """Return the structure with main convert params."""
         return self.config.get_config()
 
     def send_job(self) -> int:
