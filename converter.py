@@ -23,7 +23,6 @@ class ConvertError(Exception):
 # because each processor can have different type of result link. Example:
 # /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
 # https://www16.online-convert.com/dl/web7/download-file/8d8cd6a8-eb1d-4171-afa3-ee447036fbf0/Mystetstvo_liubovi.mobi
-#
 # TODO: make status as Enum
 # TODO: make processing statuses of processor more common
 class Converter:
@@ -83,7 +82,6 @@ class Converter:
 
         # check processing result and get it path
         result = self.get_result(job_id)
-        print(f"-----R :{result}")
 
         # save result file
         if result:

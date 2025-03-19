@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 try:
     from dotenv import load_dotenv
 except ImportError as err:
-    logger.warning("Where is issue: dotenv module is not installed in your system")
     msg = "Where is not package in your system."
+    logger.warning(msg)
     raise ImportError(msg) from err
 
 load_dotenv()

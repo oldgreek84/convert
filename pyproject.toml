@@ -20,6 +20,10 @@ dependencies = [
 [tool.mypy]
 ignore_missing_imports = true
 install_types = true
+python_executable="./venv/bin/python"
+
+[tool.ruff]
+extend = "../pyproject.toml"
 
 [tool.ruff.format]
 quote-style = "double"
