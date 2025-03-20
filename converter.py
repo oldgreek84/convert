@@ -1,20 +1,30 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PosixPath
-from typing import Any, Union
+from typing import Any, Union, TYPE_CHECKING
 
 from config import JobConfig as Config
-from interfaces import UIProtocol
-from processors import JobProcessorInterface
-from worker import WorkerProtocol
+
+from interfaces.ui_interface import UIProtocol
+from interfaces.processor_interface import JobProcessor
+from interfaces.worker_interface import Worker
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ConvertError(Exception):
     """The special type of the converter error"""
 
 
+
+# TODO: maybe make save the result private and return as result the bytes instead of link to file
+# because each processor can have different type of result link. Example:
+# /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
+# https://www16.online-convert.com/dl/web7/download-file/8d8cd6a8-eb1d-4171-afa3-ee447036fbf0/Mystetstvo_liubovi.mobi
+# TODO: make status as Enum
+# TODO: make processing statuses of processor more common
 class Converter:
     """Class which make the main business logic to convert one file format to other.
 
@@ -29,16 +39,20 @@ class Converter:
     def __init__(
         self,
         interface: UIProtocol,
-        processor: JobProcessorInterface,
-        worker: WorkerProtocol | None = None,
+        processor: JobProcessor,
+        worker: Worker | None = None,
     ) -> None:
         self.interface = interface
         self.processor = processor
         self.worker = worker
         self.config: Any[None, Config] = None
 
+    def get_status(self) -> str:
+        "Return current status of processor."
+        return self.processor.get_status()
+
     def convert(self, config: Config) -> None:
-        """converts the data to needed format. Save converted file"""
+        """Run processing the data to needed format."""
         self.set_config(config)
 
         executor = self.set_converter_executor()
@@ -48,9 +62,11 @@ class Converter:
             self.error_handler(ex)
 
     def set_config(self, config: Config) -> None:
+        """Set converter configuration."""
         self.config = config
 
     def set_converter_executor(self) -> Callable:
+        """Return Callable object to processing main flow."""
         executor = self._convert
         if self.worker:
             executor = partial(self.worker.execute, self._convert)
@@ -72,6 +88,7 @@ class Converter:
             self.save(result, self.config.path_to_save)
 
     def validate_config(self) -> None:
+        """Run different type of covert validation. Raise ConvertError in case of issues."""
         if not self.config or not self.config.get_config():
             error_msg = "Converter`s config was not set"
             raise ConvertError(error_msg)
@@ -85,10 +102,12 @@ class Converter:
         return True
 
     def get_file_path(self) -> str:
+        """Return string path to target (file need to be converted)."""
         return self.config.path_to_file
 
     # TODO: implement functionality to add different converter formats
     def get_job_options(self) -> dict:
+        """Return the structure with main convert params."""
         return self.config.get_config()
 
     def send_job(self) -> int:
@@ -102,7 +121,6 @@ class Converter:
         job_id = self.processor.send_job(path_to_file, options)
 
         # show job ID on interface
-        # self.interface.display_job_id(job_id)
         self.interface.display_common_info(f"Job ID: {job_id}")
 
         # show one time job status on interface at start
@@ -112,6 +130,8 @@ class Converter:
 
     def get_result(self, job_id: int) -> str:
         """get job result from processor. Return path to converted file"""
+        self.processor.set_status("processing")
+
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)

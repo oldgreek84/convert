@@ -3,11 +3,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from config import JobConfig, Target
+from config import JobConfig, Target, ParamsError
 from converter import Converter
-from interfaces import Config
+from interfaces.ui_interface import Config
 from uis import DOCSTRING, InterfaceError
-from utils import ParamsError, get_path, parse_command
+from utils import get_path, parse_command
 
 
 def yes_no(message="Do you want to run convert[N/y]?: "):
@@ -15,7 +15,7 @@ def yes_no(message="Do you want to run convert[N/y]?: "):
 
 
 class ConverterInterfaceCLI:
-    """Command line interface for converter to use in terminal."""
+    """Command line interface for converter to use as terminal app."""
 
     docstring = DOCSTRING
 
@@ -23,12 +23,16 @@ class ConverterInterfaceCLI:
         self.converter: None | Converter = None
 
     def convert(self, config: Config) -> None:
+        msg = ""
         if not config:
             msg = "There is not config of converter."
-            raise InterfaceError(msg)
+
         if self.converter is None:
             msg = "Converter is not initilazed"
+
+        if msg:
             raise InterfaceError(msg)
+
         self.converter.convert(config)
 
     def run(self, converter) -> None:

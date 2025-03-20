@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path, PosixPath
 from typing import Generator, Union
 
-from processors import JobProcessorInterface, ProcessorError
+from processors import ProcessorError
 
 
-class LocalProcessor(JobProcessorInterface):
-    """Test to convert via OTHER cli app"""
+class LocalProcessor:
+    """Job processor which user local installed application called "ebook-convert"
+    to convert via OTHER CLI app"""
 
     def __init__(self) -> None:
         self._status = "ready"
@@ -26,14 +26,13 @@ class LocalProcessor(JobProcessorInterface):
         if options is None:
             options = {}
 
-        # setup commad params to processing job
+        # setup command params to processing job
         params = self._prepare_command(filename, options)
         command, file_to_save = params["command"], params["file_to_save"]
 
         try:
             # if send errors to pipe we will have traceback data in process
             # can use it in debug mode
-            # process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             process = subprocess.Popen(command, stdout=subprocess.PIPE)
         except Exception as ex:
             raise ProcessorError(f"Error in send: {ex}") from ex
@@ -45,8 +44,8 @@ class LocalProcessor(JobProcessorInterface):
         """Prepare list with string command to user inner application"""
         command = ["ebook-convert", filename]
 
-        processing_targer = options["target"]
-        file_to_save = f"{filename}.{processing_targer}"
+        processing_target = options["target"]
+        file_to_save = f"{filename}.{processing_target}"
 
         other_options = self._prepare_other_options(options["options"])
         command.extend([file_to_save, *other_options])
@@ -67,9 +66,8 @@ class LocalProcessor(JobProcessorInterface):
         while True:
             line = process.stdout.readline() if process.stdout is not None else None
             if not line:
-                self._status = "completed"
+                self.set_status("completed")
                 break
-            self._status = "processing"
             yield self._status, line.decode().strip()
 
     def get_job_result(self, job_id: int) -> str:
@@ -85,11 +83,15 @@ class LocalProcessor(JobProcessorInterface):
             raise ProcessorError(f"ERROR IN RESULTS {process.stderr or ''}")
         return result
 
-    def save_file(self, path_to_result: str, path_to_save: str | Path) -> Union[str, Path, PosixPath]:
+    def save_file(
+        self, path_to_result: str, path_to_save: str | Path
+    ) -> Union[str, Path, PosixPath]:
         """save job result after processing and return path to file"""
         return self._resolve_path(path_to_result, path_to_save)
 
-    def _resolve_path(self, path_to_result: str, destenation_dir: str | Path) -> Union[str, Path, PosixPath]:
+    def _resolve_path(
+        self, path_to_result: str, destenation_dir: str | Path
+    ) -> Union[str, Path, PosixPath]:
         source_path = Path(path_to_result)
         destenation_path = Path(destenation_dir)
 

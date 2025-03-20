@@ -1,35 +1,87 @@
 from __future__ import annotations
 
-import docker
-
-from typing import Generator
+import threading
 from pathlib import Path
+from typing import Callable, Generator
+
+import docker
+from docker.errors import ImageNotFound
 
 from processors.local_processor import LocalProcessor
 
 IMAGE_NAME = "ebook_converter"
 
 
-# TODO: send prints to stdout/interface
-def init_container(rebuild: bool = False) -> docker.client.DockerClient:
+def init_container(
+    rebuild: bool = False, callback: Callable | None = None,
+) -> docker.client.DockerClient:
     client = docker.from_env()
-    image = client.images.get(IMAGE_NAME)
+
+    # try to get prebuild image
+    image = False
+    try:
+        image = client.images.get(IMAGE_NAME)
+    except ImageNotFound as err:
+        print(err)
+        rebuild = True
+
+    # rebuild image in separated thread
     if not image or rebuild:
-        path_to_dockerfile = Path(__file__).parents[0]
-        _, logs = client.images.build(path=str(path_to_dockerfile), tag=IMAGE_NAME)
-        for log in logs:
-            print(log)
+        start_build(str(Path(__file__).parents[0]), IMAGE_NAME, callback)
 
     return client
 
 
+def build_image(
+    dockerfile_path: str, tag: str, callback: Callable | None = None,
+) -> None:
+    """Build docker image via low-level api."""
+    client = docker.APIClient()
+    print(f"Building image: {tag} from {Path(dockerfile_path).resolve()}")
+
+    try:
+        response = client.build(path=dockerfile_path, tag=tag, rm=True, decode=True)
+        for chunk in response:
+            if "stream" in chunk:
+                print(chunk["stream"], end="")
+
+        print(f"\nBuild completed: {tag}")
+
+        if callback is not None:
+            callback(docker.from_env())
+
+    except docker.errors.BuildError as e:
+        print(f"Build failed: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+
+def start_build(dockerfile_path: str, tag: str, callback: Callable) -> None:
+    """Start build processing in separated thread"""
+    build_thread = threading.Thread(
+        target=build_image, args=(dockerfile_path, tag, callback)
+    )
+    build_thread.daemon = True  # Ensures the thread exits when the program closes
+    build_thread.start()
+    print("Build started in the background!")
+
+
+# TODO: send processing of container init to UI
 # TODO: split classes to make LocalProcessor more common
 #       and set it as base to other with similar logic
 class ProcessorOnDocker(LocalProcessor):
     def __init__(self) -> None:
         super().__init__()
-        self.client = init_container()
+        self.client = init_container(
+            rebuild=False, callback=self.set_docker_client)
         self.containers: dict[int, tuple] = {}
+
+    def set_docker_client(self, new_client: docker.client.DockerClient) -> None:
+        """Called when the build is done to update the client."""
+        self.client = new_client
+
+    def get_status(self) -> str:
+        return self._status
 
     def send_job(self, filename: str, options: None | dict = None) -> int:
         if options is None:
@@ -69,10 +121,13 @@ class ProcessorOnDocker(LocalProcessor):
         logs_stream = self.client.containers.get(container.id).logs(stream=True)
         try:
             while True:
-                line = next(logs_stream).decode('utf-8').strip()
+                line = next(logs_stream).decode("utf-8").strip()
                 yield self._status, line
         except StopIteration:
             pass
+
+    def set_status(self, status: str) -> None:
+        self._status = status
 
     def get_job_result(self, job_id: int) -> str:
         """get job data by job ID after processing and return it"""
@@ -83,3 +138,7 @@ class ProcessorOnDocker(LocalProcessor):
 
         container.remove()
         return result
+
+
+if __name__ == "__main__":
+    build_image(dockerfile_path="./processors", tag="my-image:latest")

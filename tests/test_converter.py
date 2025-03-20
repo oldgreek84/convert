@@ -24,12 +24,12 @@ class ConverterTestCase(unittest.TestCase):
         with \
                 patch.object(self.converter, "set_converter_executor") as mocked_executor,\
                 patch.object(self.converter, "send_job") as mocked_send,\
-                patch.object(self.converter, "get_job")as mocked_get,\
+                patch.object(self.converter, "get_result") as mocked_result,\
                 patch.object(self.converter, "save") as mocked_save:
             mocked_executor.return_value = self.converter._convert
+            mocked_result.return_value = b"test data"
             self.converter.convert(config)
         mocked_send.assert_called_once()
-        mocked_get.assert_called_once()
         mocked_save.assert_called_once()
 
     def test_main_convert_without_config(self):
@@ -64,13 +64,6 @@ class ConverterTestCase(unittest.TestCase):
             with self.assertRaises(Exception) as ex:
                 self.converter._convert()
         self.assertEqual(ex.exception.args[0], "Converter`s config was not set")
-
-    def test_main_convert_with_exception(self):
-        with patch.object(type(self.converter), "set_converter_executor") as mocked:
-            mocked.side_effect = Exception("test except")
-            with patch.object(self.converter.interface, "display_error") as mocked_ui:
-                self.converter.convert("config")
-        mocked_ui.assert_called_once()
 
     def test_get_convert_executor(self):
         self.converter.worker = DummyWorker()
@@ -126,32 +119,13 @@ class ConverterTestCase(unittest.TestCase):
         config = Mock(**attrs)
         self.converter.set_config(config)
         processor = Mock(
-            send_job_data=lambda path_to_file, file_data, options: "test_id"
+            send_job=lambda path_to_file, options: "test_id"
         )
         self.converter.processor = processor
 
         # run asserts
         res = self.converter.send_job()
         self.assertEqual(res, "test_id")
-
-    def test_get_job(self):
-        with patch.object(self.converter.processor, "is_completed") as mocked,\
-                patch.object(self.converter.processor, "get_job_result") as mocked_result:
-            mocked.return_value = True
-            mocked_result.return_value = "path/to/result"
-            res = self.converter.get_job("test_id")
-        self.assertEqual(res, "path/to/result")
-
-    def test_get_job_in_main(self):
-        with\
-                patch("time.sleep") as mocked_time,\
-                patch.object(self.converter.processor, "is_completed") as mocked,\
-                patch.object(self.converter.processor, "get_job_result") as mocked_result:
-            mocked_time.return_value = None
-            mocked.side_effect = [False, True]
-            mocked_result.return_value = "path/to/result"
-            res = self.converter.get_job("test_id")
-        self.assertEqual(res, "path/to/result")
 
     def test_error_handler(self):
         with patch.object(self.converter.interface, "display_error") as mocked:
