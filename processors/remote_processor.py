@@ -4,12 +4,13 @@ import json
 import os
 import time
 from pathlib import Path, PosixPath
-from typing import TextIO, Generator
+from typing import Generator, TextIO
 
 import requests
-from config import APIConfig
-from processors import ProcessorError
+
+from config import APIConfig, ConverterStatus
 from interfaces.processor_interface import JobProcessor
+from processors import ProcessorError
 from utils import get_full_file_path, save_data_from_response_to_dir
 
 PROCESSOR_TIMEOUT = 3
@@ -17,9 +18,9 @@ PROCESSOR_TIMEOUT = 3
 
 class JobProcessorRemote:
     """Processor use remote API for convert files."""
-    def __init__(self) -> None:
-        self.api_config = APIConfig()
-        self._status = "ready"
+    def __init__(self, api_config: APIConfig = APIConfig()) -> None:
+        self.api_config = api_config
+        self._status = ConverterStatus.READY
 
     def set_status(self, status: str) -> None:
         self._status = status
@@ -36,11 +37,21 @@ class JobProcessorRemote:
         while not self.is_completed():
             time.sleep(PROCESSOR_TIMEOUT)
             status = self._get_job_status(job_id)
-            self.set_status(status["code"])
+            self.set_status(self._prepare_status(status["code"]))
             yield self._status, status["info"]
 
+    @staticmethod
+    def _prepare_status(status_code: str) -> ConverterStatus:
+        codes_map = {
+            "ready": ConverterStatus.READY,
+            "completed": ConverterStatus.COMPLETED,
+            "processing": ConverterStatus.PROCESSING,
+            "error": ConverterStatus.FAILED,
+        }
+        return codes_map.get(status_code, ConverterStatus.FAILED)
+
     def is_completed(self) -> bool:
-        return self._status == "completed"
+        return self._status == ConverterStatus.COMPLETED
 
     def _send_job_data(self, path_to_file: str, file_data: TextIO, options: dict) -> int:
         # get server`s options for convert
@@ -51,7 +62,8 @@ class JobProcessorRemote:
         self._send_file_to_server(url_upload, path_to_file, file_data)
         return job_id
 
-    def _set_data_options(self, options: dict) -> str:
+    @staticmethod
+    def _set_data_options(options: dict) -> str:
         """return json-like object of converter options"""
         data = {
             "conversion": [
@@ -134,7 +146,8 @@ class JobProcessorRemote:
     def save_file(self, path_to_result: str, path_to_save: str | Path) -> str | PosixPath | Path:
         return self._save_from_url(path_to_result, path_to_save)
 
-    def _save_from_url(self, url: str, sub_dir: str | Path = os.path.curdir) -> str | PosixPath | Path:
+    @staticmethod
+    def _save_from_url(url: str, sub_dir: str | Path = os.path.curdir) -> str | PosixPath | Path:
         """saves file form remote URL to directory"""
         filename = url.split("/")[-1] if url else ""
         full_path = get_full_file_path(filename, sub_dir)

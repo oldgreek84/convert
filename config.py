@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 
 class ParamsError(Exception):
     """Common error class for parsing params"""
+
+
+class ConverterStatus(StrEnum):
+    READY = "ready"
+    PROCESSING = "processing"
+    FAILED = "failed"
+    COMPLETED = "completed"
+
 
 
 @dataclass
@@ -42,6 +51,7 @@ class JobConfig:
 
 
 class APIConfig:
+    """Class provides params to setup remote API."""
     def __init__(self, token: str | None = None, url: str | None = None):
         self.token = token or os.environ.get("API_KEY")
         self.url = url or os.environ.get("CONVERTER_URL")

@@ -5,6 +5,7 @@ from pathlib import Path, PosixPath
 from typing import Any, Union, TYPE_CHECKING
 
 from config import JobConfig as Config
+from config import ConverterStatus
 
 from interfaces.ui_interface import UIProtocol
 from interfaces.processor_interface import JobProcessor
@@ -18,13 +19,12 @@ class ConvertError(Exception):
     """The special type of the converter error"""
 
 
-
+# TODO: implement functionality to add different converter formats
+# TODO: implement saver class to replace logic of saving results with different sources
 # TODO: maybe make save the result private and return as result the bytes instead of link to file
 # because each processor can have different type of result link. Example:
 # /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
 # https://www16.online-convert.com/dl/web7/download-file/8d8cd6a8-eb1d-4171-afa3-ee447036fbf0/Mystetstvo_liubovi.mobi
-# TODO: make status as Enum
-# TODO: make processing statuses of processor more common
 class Converter:
     """Class which make the main business logic to convert one file format to other.
 
@@ -48,7 +48,7 @@ class Converter:
         self.config: Any[None, Config] = None
 
     def get_status(self) -> str:
-        "Return current status of processor."
+        """Return current status of processor."""
         return self.processor.get_status()
 
     def convert(self, config: Config) -> None:
@@ -88,14 +88,28 @@ class Converter:
             self.save(result, self.config.path_to_save)
 
     def validate_config(self) -> None:
-        """Run different type of covert validation. Raise ConvertError in case of issues."""
+        """Run different type of covert validation.
+
+        Raises:
+            ConvertError: in case of issues with converting.
+        """
         if not self.config or not self.config.get_config():
             error_msg = "Converter`s config was not set"
             raise ConvertError(error_msg)
 
     @staticmethod
     def validate_path(path_to_file: str) -> bool:
-        """validate path to file for converting"""
+        """Validate path to file for converting.
+
+        Args:
+            path_to_file: sting path to open file.
+
+        Returns:
+            return True if all is right.
+
+        Raises:
+            ConvertError: raise error if path is not valid.
+        """
         if not Path(path_to_file).is_file():
             msg = "Invalid file path"
             raise ConvertError(msg)
@@ -105,7 +119,6 @@ class Converter:
         """Return string path to target (file need to be converted)."""
         return self.config.path_to_file
 
-    # TODO: implement functionality to add different converter formats
     def get_job_options(self) -> dict:
         """Return the structure with main convert params."""
         return self.config.get_config()
@@ -124,13 +137,13 @@ class Converter:
         self.interface.display_common_info(f"Job ID: {job_id}")
 
         # show one time job status on interface at start
-        self.interface.display_job_status("start")
+        self.interface.display_job_status(ConverterStatus.READY)
 
         return job_id
 
     def get_result(self, job_id: int) -> str:
         """get job result from processor. Return path to converted file"""
-        self.processor.set_status("processing")
+        self.processor.set_status(ConverterStatus.PROCESSING)
 
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
@@ -147,9 +160,8 @@ class Converter:
         """Send error from converter to user interface."""
         self.interface.display_error(f"Converter got an error: {error}")
 
-    # TODO: implement saver class to replace logic of saving results with different sources
     def save(self, file_path: str, path_to_save: Union[Path, str]) -> Union[str, Path, PosixPath]:
         path = self.processor.save_file(file_path, path_to_save)
         self.interface.display_job_result(path)
-        self.interface.display_job_status("completed")
+        self.interface.display_job_status(ConverterStatus.COMPLETED)
         return path

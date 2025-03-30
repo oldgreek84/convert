@@ -15,6 +15,10 @@ IMAGE_NAME = "ebook_converter"
 def init_container(
     rebuild: bool = False, callback: Callable | None = None,
 ) -> docker.client.DockerClient:
+    """Run docker container with converter application.
+    If docker image is not exist in system it will build the new one.
+    Return docker client.
+    """
     client = docker.from_env()
 
     # try to get prebuild image

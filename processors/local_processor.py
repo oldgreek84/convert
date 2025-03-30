@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path, PosixPath
 from typing import Generator, Union
+from config import ConverterStatus
 
 from processors import ProcessorError
 
@@ -12,7 +13,7 @@ class LocalProcessor:
     to convert via OTHER CLI app"""
 
     def __init__(self) -> None:
-        self._status = "ready"
+        self._status = ConverterStatus.READY
         self.processes: dict[int, tuple] = {}
 
     def _get_process(self, job_id: int) -> subprocess.Popen:
@@ -20,7 +21,7 @@ class LocalProcessor:
 
     def is_completed(self) -> bool:
         """return True if job is completed"""
-        return self._status == "completed"
+        return self._status == ConverterStatus.COMPLETED
 
     def send_job(self, filename: str, options: None | dict = None) -> int:
         if options is None:
@@ -54,7 +55,8 @@ class LocalProcessor:
             "command": command,
         }
 
-    def _prepare_other_options(self, options: dict) -> list:
+    @staticmethod
+    def _prepare_other_options(options: dict) -> list:
         return list(options.keys())
 
     def get_job_status(self, job_id: int) -> Generator:
@@ -66,7 +68,7 @@ class LocalProcessor:
         while True:
             line = process.stdout.readline() if process.stdout is not None else None
             if not line:
-                self.set_status("completed")
+                self.set_status(ConverterStatus.COMPLETED)
                 break
             yield self._status, line.decode().strip()
 
@@ -85,20 +87,18 @@ class LocalProcessor:
 
     def save_file(
         self, path_to_result: str, path_to_save: str | Path
-    ) -> Union[str, Path, PosixPath]:
+    ) -> str | Path | PosixPath:
         """save job result after processing and return path to file"""
         return self._resolve_path(path_to_result, path_to_save)
 
+    @staticmethod
     def _resolve_path(
-        self, path_to_result: str, destenation_dir: str | Path
-    ) -> Union[str, Path, PosixPath]:
+        path_to_result: str, destination_dir: str | Path
+    ) -> str | Path | PosixPath:
+        """Return exists path by destination path in system"""
         source_path = Path(path_to_result)
-        destenation_path = Path(destenation_dir)
-
+        destenation_path = Path(destination_dir)
         destenation_path.mkdir(parents=True, exist_ok=True)
-
         new_file_path = destenation_path / source_path.name
-
         source_path.rename(new_file_path)
-
         return new_file_path
