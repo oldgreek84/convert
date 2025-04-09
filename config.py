@@ -16,7 +16,6 @@ class ConverterStatus(StrEnum):
     COMPLETED = "completed"
 
 
-
 @dataclass
 class Target:
     target: str

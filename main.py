@@ -4,7 +4,7 @@ from config import APIConfig
 from converter import Converter
 
 from processors.local_processor import LocalProcessor
-from processors.processor_on_docker import ProcessorOnDocker
+from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
 from processors.remote_processor import JobProcessorRemote
 
 from uis.cli_ui import ConverterInterfaceCLI
@@ -27,7 +27,7 @@ load_dotenv()
 def main() -> None:
     interface = ConverterInterfaceTk()
     worker = ThreadWorker()
-    processor = ProcessorOnDocker()
+    processor = ProcessorOnDocker(TextRedirector(interface))
 
     converter = Converter(interface, processor, worker)
     interface.run(converter)

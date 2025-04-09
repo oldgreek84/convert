@@ -32,6 +32,7 @@ class ConverterInterfaceTk:
 
     def __init__(self) -> None:
         self.view: TkView = TkView(self)
+        self.view.create_view()
 
     def run(self, converter: Converter) -> None:
         self.converter = converter
@@ -75,6 +76,7 @@ class ConverterInterfaceTk:
         self.view.processing_error(error)
 
 
+# TODO: remove redounded methods
 class TkView:
     def __init__(self, interface: ConverterInterfaceTk) -> None:
         self.interface = interface
@@ -82,31 +84,9 @@ class TkView:
         self.root.geometry("800x550")
         self._config: dict[str, Any] = {}
 
-    def bind_convert_direction_from(self, event):
-        current_val = self.selection_from.get()
-        default = "mobi"
-        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
-        self.selection_to.set(list_of_possible[0])
-
-    def bind_convert_direction_to(self, event):
-        current_val = self.selection_to.get()
-        default = "fb2"
-        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
-        self.selection_from.set(list_of_possible[0])
-
-    def bind_open_file_tap(self, event):
-        self.open_file()
-
-    def get_status(self):
-        print(self.interface.converter.get_status())
-
-    def increment_progress(self, value):
-        self.progress_bar["value"] += value
-
     def create_view(self) -> None:
         # get window params
         screen_width = self.root.winfo_width()
-        screen_height = self.root.winfo_height()
 
         # add label
         label_title = ttkb.Label(self.root, text="Please, choose file and format to convert")
@@ -174,13 +154,33 @@ class TkView:
         self.result_txt = ttkb.Text(self.root, width=screen_width, height=100)
         self.result_txt.pack(pady=10, padx=10, fill=tk.X)
 
-    def set_data(self, key: Any, value: Any) -> None:
-        self._config[key] = value
+    def bind_convert_direction_from(self, event):
+        current_val = self.selection_from.get()
+        default = "mobi"
+        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
+        self.selection_to.set(list_of_possible[0])
+
+    def bind_convert_direction_to(self, event):
+        current_val = self.selection_to.get()
+        default = "fb2"
+        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
+        self.selection_from.set(list_of_possible[0])
+
+    def bind_convert_direction(self, event, direction="mobi"):
+        current_val = self.selection_to.get()
+        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [direction])
+        self.selection_from.set(list_of_possible[0])
+
+    def bind_open_file_tap(self, event):
+        self.open_file()
 
     def set_config(self):
         self.set_data("path_to_file", self.file_field.get("0.0", "end").strip("\n"))
         self.set_data("category", "ebook")
         self.set_data("target", self.selection_to.get())
+
+    def set_data(self, key: Any, value: Any) -> None:
+        self._config[key] = value
 
     def interface_convert(self) -> bool:
         """Run convert processing in UI"""
@@ -229,6 +229,7 @@ class TkView:
             return
 
         self.result_txt.insert(tk.END, message.strip() + "\n")
+        self.result_txt.see(tk.END)
 
     def update_text_message(self, message: str) -> None:
         """Clear old message from text area and write new one"""
@@ -249,6 +250,5 @@ class TkView:
         dialog_window(title="Converter Info", message=message)
 
     def run(self) -> None:
-        self.create_view()
         self.set_status("ready")
         self.root.mainloop()

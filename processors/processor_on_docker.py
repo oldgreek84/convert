@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import threading
 from pathlib import Path
 from typing import Callable, Generator
@@ -13,7 +14,8 @@ IMAGE_NAME = "ebook_converter"
 
 
 def init_container(
-    rebuild: bool = False, callback: Callable | None = None,
+    rebuild: bool = False,
+    callback: Callable | None = None,
 ) -> docker.client.DockerClient:
     """Run docker container with converter application.
     If docker image is not exist in system it will build the new one.
@@ -37,7 +39,9 @@ def init_container(
 
 
 def build_image(
-    dockerfile_path: str, tag: str, callback: Callable | None = None,
+    dockerfile_path: str,
+    tag: str,
+    callback: Callable | None = None,
 ) -> None:
     """Build docker image via low-level api."""
     client = docker.APIClient()
@@ -62,23 +66,35 @@ def build_image(
 
 def start_build(dockerfile_path: str, tag: str, callback: Callable) -> None:
     """Start build processing in separated thread"""
-    build_thread = threading.Thread(
-        target=build_image, args=(dockerfile_path, tag, callback)
-    )
+    build_thread = threading.Thread(target=build_image, args=(dockerfile_path, tag, callback))
     build_thread.daemon = True  # Ensures the thread exits when the program closes
     build_thread.start()
     print("Build started in the background!")
 
 
-# TODO: send processing of container init to UI
+class TextRedirector(object):
+    """Class which can redirect stdout to a UI text widget."""
+
+    def __init__(self, widget, tag="stdout"):
+        self.widget = widget
+        self.tag = tag
+
+    def write(self, message):
+        self.widget.display_common_info(message)
+
+    def flush(self):
+        pass  # Required for sys.stdout compatibility
+
+
+# TODO: make processing STATUS more generic (not typing in each class)
 # TODO: split classes to make LocalProcessor more common
 #       and set it as base to other with similar logic
 class ProcessorOnDocker(LocalProcessor):
-    def __init__(self) -> None:
+    def __init__(self, redirector=sys.stdout) -> None:
         super().__init__()
-        self.client = init_container(
-            rebuild=False, callback=self.set_docker_client)
+        self.client = None
         self.containers: dict[int, tuple] = {}
+        sys.stdout = redirector
 
     def set_docker_client(self, new_client: docker.client.DockerClient) -> None:
         """Called when the build is done to update the client."""
@@ -87,7 +103,8 @@ class ProcessorOnDocker(LocalProcessor):
     def get_status(self) -> str:
         return self._status
 
-    def send_job(self, filename: str, options: None | dict = None) -> int:
+    def send_job(self, filename: str, options: dict | None = None) -> int:
+        self.client = init_container(rebuild=False, callback=self.set_docker_client)
         if options is None:
             options = {}
 

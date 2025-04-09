@@ -9,8 +9,9 @@ from processors import ProcessorError
 
 
 class LocalProcessor:
-    """Job processor which user local installed application called "ebook-convert"
-    to convert via OTHER CLI app"""
+    """Job processor which user local installed application called
+    "ebook-convert" to convert via OTHER CLI app.
+    """
 
     def __init__(self) -> None:
         self._status = ConverterStatus.READY
@@ -85,16 +86,12 @@ class LocalProcessor:
             raise ProcessorError(f"ERROR IN RESULTS {process.stderr or ''}")
         return result
 
-    def save_file(
-        self, path_to_result: str, path_to_save: str | Path
-    ) -> str | Path | PosixPath:
+    def save_file(self, path_to_result: str, path_to_save: str | Path) -> str | Path | PosixPath:
         """save job result after processing and return path to file"""
         return self._resolve_path(path_to_result, path_to_save)
 
     @staticmethod
-    def _resolve_path(
-        path_to_result: str, destination_dir: str | Path
-    ) -> str | Path | PosixPath:
+    def _resolve_path(path_to_result: str, destination_dir: str | Path) -> str | Path | PosixPath:
         """Return exists path by destination path in system"""
         source_path = Path(path_to_result)
         destenation_path = Path(destination_dir)

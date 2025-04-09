@@ -19,6 +19,7 @@ class ConvertError(Exception):
     """The special type of the converter error"""
 
 
+# TODO: make processing STATUS more generic (not typing in each class)
 # TODO: implement functionality to add different converter formats
 # TODO: implement saver class to replace logic of saving results with different sources
 # TODO: maybe make save the result private and return as result the bytes instead of link to file
