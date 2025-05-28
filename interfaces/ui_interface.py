@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, Union, TYPE_CHECKING
 
-from config import JobConfig as Config
+from config import ConverterStatus, JobConfig as Config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,6 +38,6 @@ class UIProtocol(Protocol):
         """Show common info on the UI."""
         raise NotImplementedError
 
-    def display_error(self, error: str) -> None:
+    def display_error(self, error: str, status: ConverterStatus) -> None:
         """Show error messages on the UI."""
         raise NotImplementedError

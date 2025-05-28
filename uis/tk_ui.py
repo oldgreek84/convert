@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import ttkbootstrap as ttkb
-from config import JobConfig as Config
+from config import ConverterStatus, JobConfig as Config
 from config import Target
 from ttkbootstrap.dialogs import Messagebox
 
@@ -54,10 +54,10 @@ class ConverterInterfaceTk:
     def get_config(self):
         return self.config
 
-    def display_job_status(self, status: str) -> None:
+    def display_job_status(self, status: ConverterStatus) -> None:
         self.view.set_status(status)
 
-    def display_common_info(self, message: str, status: str | None = None) -> None:
+    def display_common_info(self, message: str, status: ConverterStatus | None = None) -> None:
         if status is not None:
             self.display_job_status(status)
         self.view.add_text_message(message)
@@ -70,8 +70,8 @@ class ConverterInterfaceTk:
     def display_job_id(self, job_id: str) -> None:
         self.view.update_text_message(job_id)
 
-    def display_error(self, error: str) -> None:
-        self.display_job_status("error")
+    def display_error(self, error: str, status: ConverterStatus) -> None:
+        self.display_job_status(status)
         tkthread.call_nosync(self.view.show_message, error, "show_error")
         self.view.processing_error(error)
 
@@ -250,5 +250,4 @@ class TkView:
         dialog_window(title="Converter Info", message=message)
 
     def run(self) -> None:
-        self.set_status("ready")
         self.root.mainloop()

@@ -2,27 +2,24 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path, PosixPath
-from typing import Generator, Union
+from typing import Generator
 from config import ConverterStatus
 
 from processors import ProcessorError
+from interfaces.processor_interface import JobProcessor
 
 
-class LocalProcessor:
+class LocalProcessor(JobProcessor):
     """Job processor which user local installed application called
     "ebook-convert" to convert via OTHER CLI app.
     """
 
     def __init__(self) -> None:
-        self._status = ConverterStatus.READY
+        super().__init__()
         self.processes: dict[int, tuple] = {}
 
     def _get_process(self, job_id: int) -> subprocess.Popen:
         return self.processes[job_id][0]
-
-    def is_completed(self) -> bool:
-        """return True if job is completed"""
-        return self._status == ConverterStatus.COMPLETED
 
     def send_job(self, filename: str, options: None | dict = None) -> int:
         if options is None:
@@ -66,12 +63,8 @@ class LocalProcessor:
         yield from self._get_job_status(process)
 
     def _get_job_status(self, process: subprocess.Popen) -> Generator:
-        while True:
-            line = process.stdout.readline() if process.stdout is not None else None
-            if not line:
-                self.set_status(ConverterStatus.COMPLETED)
-                break
-            yield self._status, line.decode().strip()
+        for line in process.stdout.read():
+            yield line.decode().strip()
 
     def get_job_result(self, job_id: int) -> str:
         """get job data by job ID after processing and return it"""

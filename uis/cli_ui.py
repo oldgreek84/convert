@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from config import JobConfig, Target, ParamsError
+from config import ConverterStatus, JobConfig, ParamsError, Target
 from converter import Converter
 from interfaces.ui_interface import Config
 from uis import DOCSTRING, InterfaceError
@@ -22,6 +22,10 @@ class ConverterInterfaceCLI:
     def __init__(self) -> None:
         self.converter: None | Converter = None
 
+    def _print(self, msg: str) -> None:
+        sys.__stdout__.write(msg + "\n")
+        sys.__stdout__.flush()
+
     def convert(self, config: Config) -> None:
         msg = ""
         if not config:
@@ -37,19 +41,16 @@ class ConverterInterfaceCLI:
 
     def run(self, converter) -> None:
         self.converter = converter
-        try:
-            config = self.setup()
-            if yes_no():
-                self.convert(config)
-        except Exception as ex:
-            self.display_error(f"Something wrong: {ex}")
+        config = self.setup()
+        if yes_no():
+            self.convert(config)
 
     def setup(self) -> Config:
         try:
             args = self._get_params(sys.argv)
         except ParamsError as err:
             self.display_common_info(self.docstring)
-            msg = "There is not params to set"
+            msg = f"There is not params to set ({err})"
             raise ParamsError(msg) from err
 
         return JobConfig(*args)
@@ -81,22 +82,22 @@ class ConverterInterfaceCLI:
         self.display_common_info(msg)
         return target_object, working_file_path
 
-    def display_common_info(self, message: str, status: str | None = None) -> None:
+    def display_common_info(self, message: str, status: ConverterStatus | None = None) -> None:
         msg = ">>> INTERFACE"
         if status is not None:
             msg += f" [STATUS: {status}] \t|"
         msg += f" INFO: {message}"
-        print(msg)
+        self._print(msg)
 
-    def display_job_status(self, status: str) -> None:
-        print(f">>> INTERFACE STATUS: {status}")
+    def display_job_status(self, status: ConverterStatus) -> None:
+        self._print(f">>> INTERFACE STATUS: {status}")
 
     def display_job_result(self, result: Path | str) -> None:
-        print(f">>> INTERFACE RESULT: {result}")
+        self._print(f">>> INTERFACE RESULT: {result}")
 
     def display_job_id(self, job_id: str) -> None:
-        print(f">>> INTERFACE JOB ID: {job_id}")
+        self._print(f">>> INTERFACE JOB ID: {job_id}")
 
-    def display_error(self, error: str) -> None:
-        self.display_job_status("error")
-        print(f">>> INTERFACE ERROR: {error}")
+    def display_error(self, error: str, status: ConverterStatus) -> None:
+        self.display_job_status(status)
+        self._print(f">>> INTERFACE ERROR: {error}")

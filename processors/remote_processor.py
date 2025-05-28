@@ -16,12 +16,13 @@ from utils import get_full_file_path, save_data_from_response_to_dir
 PROCESSOR_TIMEOUT = 3
 
 
-class JobProcessorRemote:
+class JobProcessorRemote(JobProcessor):
     """Processor use remote API for convert files."""
 
     def __init__(self, api_config: APIConfig = APIConfig()) -> None:
+        super().__init__()
         self.api_config = api_config
-        self._status = ConverterStatus.READY
+        self._status = None
 
     def set_status(self, status: str) -> None:
         self._status = status
@@ -37,9 +38,10 @@ class JobProcessorRemote:
     def get_job_status(self, job_id: int) -> Generator:
         while not self.is_completed():
             time.sleep(PROCESSOR_TIMEOUT)
-            status = self._get_job_status(job_id)
-            self.set_status(self._prepare_status(status["code"]))
-            yield self._status, status["info"]
+            status_info = self._get_job_status(job_id)
+            status = self._prepare_status(status_info["code"])
+            self.set_status(status)
+            yield status_info["info"]
 
     @staticmethod
     def _prepare_status(status_code: str) -> ConverterStatus:

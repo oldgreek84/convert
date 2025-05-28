@@ -11,6 +11,7 @@ from interfaces.ui_interface import UIProtocol
 from interfaces.processor_interface import JobProcessor
 from interfaces.worker_interface import Worker
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -47,18 +48,24 @@ class Converter:
         self.processor = processor
         self.worker = worker
         self.config: Any[None, Config] = None
+        self.set_status(ConverterStatus.READY)
 
     def get_status(self) -> str:
         """Return current status of processor."""
-        return self.processor.get_status()
+        return self.status
+
+    def set_status(self, status: ConverterStatus) -> None:
+        self.status = status
+        self.interface.display_job_status(self.status)
 
     def convert(self, config: Config) -> None:
         """Run processing the data to needed format."""
+        self.set_status(ConverterStatus.PROCESSING)
         self.set_config(config)
 
-        executor = self.set_converter_executor()
+        run_process = self.set_converter_executor()
         try:
-            executor()
+            run_process()
         except Exception as ex:
             self.error_handler(ex)
 
@@ -87,6 +94,8 @@ class Converter:
         # save result file
         if result:
             self.save(result, self.config.path_to_save)
+
+        self.set_status(ConverterStatus.COMPLETED)
 
     def validate_config(self) -> None:
         """Run different type of covert validation.
@@ -125,7 +134,7 @@ class Converter:
         return self.config.get_config()
 
     def send_job(self) -> int:
-        """send job data to processor. Return job ID"""
+        """Send job data to processor. Return job ID"""
         # setup converter options
         path_to_file = self.get_file_path()
         self.validate_path(path_to_file)
@@ -137,20 +146,16 @@ class Converter:
         # show job ID on interface
         self.interface.display_common_info(f"Job ID: {job_id}")
 
-        # show one time job status on interface at start
-        self.interface.display_job_status(ConverterStatus.READY)
-
         return job_id
 
     def get_result(self, job_id: int) -> str:
-        """get job result from processor. Return path to converted file"""
-        self.processor.set_status(ConverterStatus.PROCESSING)
+        """Get job result from processor. Return path to converted file"""
 
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)
-        for status, message in processor_info:
-            self.interface.display_common_info(message, status=status)
+        for message in processor_info:
+            self.interface.display_common_info(message, status=ConverterStatus.PROCESSING)
 
         # after end of processing data return the result as bytes data or Path to save file
         # NOTE: need to check different types of results
@@ -159,10 +164,10 @@ class Converter:
 
     def error_handler(self, error: Exception) -> None:
         """Send error from converter to user interface."""
-        self.interface.display_error(f"Converter got an error: {error}")
+        self.set_status(ConverterStatus.FAILED)
+        self.interface.display_error(f"Converter got an error: {error}", ConverterStatus.FAILED)
 
     def save(self, file_path: str, path_to_save: Union[Path, str]) -> Union[str, Path, PosixPath]:
         path = self.processor.save_file(file_path, path_to_save)
         self.interface.display_job_result(path)
-        self.interface.display_job_status(ConverterStatus.COMPLETED)
         return path

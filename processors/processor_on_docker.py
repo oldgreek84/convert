@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sys
 import threading
+import docker
+
 from pathlib import Path
 from typing import Callable, Generator
-
-import docker
 from docker.errors import ImageNotFound
 
 from processors.local_processor import LocalProcessor
@@ -86,7 +86,6 @@ class TextRedirector(object):
         pass  # Required for sys.stdout compatibility
 
 
-# TODO: make processing STATUS more generic (not typing in each class)
 # TODO: split classes to make LocalProcessor more common
 #       and set it as base to other with similar logic
 class ProcessorOnDocker(LocalProcessor):
@@ -99,9 +98,6 @@ class ProcessorOnDocker(LocalProcessor):
     def set_docker_client(self, new_client: docker.client.DockerClient) -> None:
         """Called when the build is done to update the client."""
         self.client = new_client
-
-    def get_status(self) -> str:
-        return self._status
 
     def send_job(self, filename: str, options: dict | None = None) -> int:
         self.client = init_container(rebuild=False, callback=self.set_docker_client)
@@ -140,15 +136,8 @@ class ProcessorOnDocker(LocalProcessor):
     def get_job_status(self, job_id: int) -> Generator:
         container = self._get_container(job_id)
         logs_stream = self.client.containers.get(container.id).logs(stream=True)
-        try:
-            while True:
-                line = next(logs_stream).decode("utf-8").strip()
-                yield self._status, line
-        except StopIteration:
-            pass
-
-    def set_status(self, status: str) -> None:
-        self._status = status
+        for line in logs_stream:
+            yield line.decode("utf-8").strip()
 
     def get_job_result(self, job_id: int) -> str:
         """get job data by job ID after processing and return it"""
