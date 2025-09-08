@@ -57,17 +57,23 @@ A versatile e-book conversion tool that supports various processing methods and 
 
 #### Running the Application
 
-To run the application (which currently defaults to the Tkinter GUI):
+To run the application with a specific user interface:
 
-```bash
-uv run main.py
-```
+*   **Command-Line Interface (CLI)**:
+    ```bash
+    uv run main.py --ui cli
+    # Or using Python directly:
+    # python main.py --ui cli
+    ```
 
-Alternatively, using Python directly:
+*   **Tkinter GUI**:
+    ```bash
+    uv run main.py --ui tk
+    # Or using Python directly:
+    # python main.py --ui tk
+    ```
 
-```bash
-python main.py
-```
+If no `--ui` argument is provided, the application will default to the Tkinter GUI.
 
 #### 3. Web Service (using Docker Compose)
 
@@ -86,7 +92,7 @@ To run the web-based converter using Docker Compose (includes both backend and f
 To run the unit and integration tests:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 ## Configuration
