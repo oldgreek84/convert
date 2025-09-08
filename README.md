@@ -55,20 +55,18 @@ A versatile e-book conversion tool that supports various processing methods and 
 
 ### Running the Application
 
-#### 1. Command-Line Interface (CLI)
+#### Running the Application
 
-To run the CLI version of the converter:
+To run the application (which currently defaults to the Tkinter GUI):
 
 ```bash
-python main.py --ui cli
+uv run main.py
 ```
 
-#### 2. Tkinter GUI
-
-To run the Tkinter-based GUI:
+Alternatively, using Python directly:
 
 ```bash
-python main.py --ui tk
+python main.py
 ```
 
 #### 3. Web Service (using Docker Compose)
