@@ -92,7 +92,7 @@ To run the web-based converter using Docker Compose (includes both backend and f
 To run the unit and integration tests:
 
 ```bash
-pytest
+uv run pytest
 ```
 
 ## Configuration
