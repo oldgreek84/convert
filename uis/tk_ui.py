@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 work_dir = Path(__file__)
 
 CONVERTER_FORMATS_MAPPING = {
+    "pdf": ["mobi"],
     "mobi": ["fb2", "txt", "epub"],
     "fb2": ["mobi", "txt", "epub"],
     "ebook": ["mobi", "fb2", "epub", "txt"],
@@ -97,7 +98,7 @@ class TkView:
         self.frame2 = ttkb.Frame(self.root)
         self.frame2.pack(pady=10)
 
-        options = {"from": ["fb2", "txt", "epub"], "to": ["mobi", "fb2"]}
+        options = {"from": ["fb2", "txt", "epub", "pdf"], "to": ["mobi", "fb2"]}
 
         self.selection_from = ttkb.Combobox(self.frame2, bootstyle="info", values=options["from"])
         self.selection_from.grid(column=1, row=0, padx=10)

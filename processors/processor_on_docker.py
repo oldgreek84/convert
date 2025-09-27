@@ -72,7 +72,7 @@ def start_build(dockerfile_path: str, tag: str, callback: Callable) -> None:
     print("Build started in the background!")
 
 
-class TextRedirector(object):
+class TextRedirector:
     """Class which can redirect stdout to a UI text widget."""
 
     def __init__(self, widget, tag="stdout"):

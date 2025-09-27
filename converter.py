@@ -10,6 +10,7 @@ from config import ConverterStatus
 from interfaces.ui_interface import UIProtocol
 from interfaces.processor_interface import JobProcessor
 from interfaces.worker_interface import Worker
+from interfaces.saver_interface import SaverProtocol
 
 
 if TYPE_CHECKING:
@@ -20,7 +21,6 @@ class ConvertError(Exception):
     """The special type of the converter error"""
 
 
-# TODO: make processing STATUS more generic (not typing in each class)
 # TODO: implement functionality to add different converter formats
 # TODO: implement saver class to replace logic of saving results with different sources
 # TODO: maybe make save the result private and return as result the bytes instead of link to file
@@ -42,10 +42,12 @@ class Converter:
         self,
         interface: UIProtocol,
         processor: JobProcessor,
+        saver: SaverProtocol,
         worker: Worker | None = None,
     ) -> None:
         self.interface = interface
         self.processor = processor
+        self.saver = saver
         self.worker = worker
         self.config: Any[None, Config] = None
         self.set_status(ConverterStatus.READY)
@@ -93,7 +95,7 @@ class Converter:
 
         # save result file
         if result:
-            self.save(result, self.config.path_to_save)
+            self.save(result)
 
         self.set_status(ConverterStatus.COMPLETED)
 
@@ -150,7 +152,6 @@ class Converter:
 
     def get_result(self, job_id: int) -> str:
         """Get job result from processor. Return path to converted file"""
-
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)
@@ -167,7 +168,19 @@ class Converter:
         self.set_status(ConverterStatus.FAILED)
         self.interface.display_error(f"Converter got an error: {error}", ConverterStatus.FAILED)
 
-    def save(self, file_path: str, path_to_save: Union[Path, str]) -> Union[str, Path, PosixPath]:
-        path = self.processor.save_file(file_path, path_to_save)
-        self.interface.display_job_result(path)
-        return path
+    def save(self, source_path: str) -> str | Path | PosixPath:
+        """Save result of processing.
+
+        This method now follows the open-closed principle by:
+        1. Using the saver's setup method to configure saver-specific parameters
+        2. Each saver implementation handles its own required parameters via setup()
+        3. No need to modify this method when adding new saver types
+        """
+        # Setup saver with source path and destination from config
+        self.saver.setup(
+            source_path=source_path,
+            destination_path=self.config.path_to_save
+        )
+        result = self.saver.save()
+        self.interface.display_job_result(result)
+        return result

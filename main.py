@@ -7,6 +7,9 @@ from processors.local_processor import LocalProcessor
 from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
 from processors.remote_processor import JobProcessorRemote
 
+from savers.local_saver import LocalFileSaver
+from savers.google_drive_saver import GoogleDriveSaver
+
 from uis.cli_ui import ConverterInterfaceCLI
 from uis.tk_ui import ConverterInterfaceTk
 
@@ -28,7 +31,9 @@ def main() -> None:
     interface = ConverterInterfaceCLI()
     worker = ThreadWorker()
     processor = ProcessorOnDocker(TextRedirector(interface))
-    converter = Converter(interface, processor, worker)
+    saver = LocalFileSaver()
+
+    converter = Converter(interface, processor, saver, worker)
     interface.run(converter)
 
 

@@ -23,10 +23,13 @@ def coroutine(func: Callable):
     return wrap
 
 
-def catcher(error_list=None):
+def catcher(error_list: list | None = None):
     """decorator catch all exception in function and
     return message with errors
     """
+
+    if error_list is None:
+        error_list = []
 
     def catcher_wrap(func: Callable):
         @wraps(func)

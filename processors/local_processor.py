@@ -3,7 +3,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path, PosixPath
 from typing import Generator
-from config import ConverterStatus
 
 from processors import ProcessorError
 from interfaces.processor_interface import JobProcessor
