@@ -1,3 +1,4 @@
+import argparse
 import logging
 
 from config import APIConfig
@@ -29,6 +30,21 @@ load_dotenv()
 
 def main() -> None:
     interface = ConverterInterfaceCLI()
+    parser = argparse.ArgumentParser(description="E-book Converter Application")
+    parser.add_argument(
+        "--ui",
+        type=str,
+        choices=["cli", "tk"],
+        default="tk",
+        help="Choose the user interface: 'cli' for Command-Line, 'tk' for Tkinter GUI",
+    )
+    args = parser.parse_args()
+
+    if args.ui == "cli":
+        interface = ConverterInterfaceCLI()
+    else:
+        interface = ConverterInterfaceTk()
+
     worker = ThreadWorker()
     processor = ProcessorOnDocker(TextRedirector(interface))
     saver = LocalFileSaver()

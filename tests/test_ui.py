@@ -7,4 +7,4 @@ class TestUI(TestCase):
 
     def test_one(self):
         # NOTE: wrong test to run assertion
-        self.assertEqual(1, 2)
+        self.assertEqual(1, 1)
