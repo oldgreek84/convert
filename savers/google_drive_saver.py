@@ -8,24 +8,25 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 
 from interfaces.saver_interface import SaverProtocol
+import pathlib
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 
-def init():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(current_dir, "token.json")
-    credentials_path = os.path.join(current_dir, "credentials.json")
+def init_gdrive_service():
+    current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent
+    token_path = current_dir / "token.json"
+    credentials_path = current_dir / "credentials.json"
 
     creds = None
-    if os.path.exists(token_path):
+    if token_path.exists():
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if not os.path.exists(credentials_path):
+            if not credentials_path.exists():
                 raise FileNotFoundError(f"credentials.json not found at {credentials_path}")
 
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
@@ -39,7 +40,7 @@ def init():
 
 class GoogleDriveSaver(SaverProtocol):
     def __init__(self):
-        self.service = init()
+        self.service = init_gdrive_service()
         self.source_path = None
 
     def setup(self, **kwargs):
