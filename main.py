@@ -1,5 +1,6 @@
 import argparse
 import logging
+import formats
 
 from config import APIConfig
 from converter import Converter
@@ -26,6 +27,14 @@ except ImportError as err:
     raise ImportError(msg) from err
 
 load_dotenv()
+
+
+
+# Load all format modules
+formats.load_formats()
+
+# Access the registry
+print("Available formats:", list(formats.registry.keys()))
 
 
 def main() -> None:
