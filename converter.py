@@ -2,23 +2,21 @@ from __future__ import annotations
 
 from functools import partial
 from pathlib import Path, PosixPath
-from typing import Any, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from config import JobConfig as Config
 from config import ConverterStatus
+from config import JobConfig as Config
 
-from interfaces.ui_interface import UIProtocol
-from interfaces.processor_interface import JobProcessor
-from interfaces.worker_interface import Worker
-from interfaces.saver_interface import SaverProtocol
+from exceptions import ConverterError
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-
-class ConvertError(Exception):
-    """The special type of the converter error"""
+    from interfaces.processor_interface import JobProcessor
+    from interfaces.saver_interface import SaverProtocol
+    from interfaces.ui_interface import UIProtocol
+    from interfaces.worker_interface import Worker
 
 
 # TODO: implement functionality to add different converter formats
@@ -28,14 +26,43 @@ class ConvertError(Exception):
 # /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
 # https://www16.online-convert.com/dl/web7/download-file/8d8cd6a8-eb1d-4171-afa3-ee447036fbf0/Mystetstvo_liubovi.mobi
 class Converter:
-    """Class which make the main business logic to convert one file format to other.
+    """Main orchestrator class that coordinates e-book conversion operations.
 
-    For setup formats and run processing uses different kind of user interface classes.
-    UI (self.interface) is used for display status of processing, errors and result.
+    The Converter class implements the core business logic for converting e-book files
+    from one format to another. It follows the dependency injection pattern, accepting
+    pluggable components for user interface, processing, saving, and concurrency.
 
-    For converting uses different kind of processor class.
+    This class coordinates the entire conversion workflow:
+    1. Validates configuration and file paths
+    2. Sends conversion jobs to processors
+    3. Monitors processing status and displays updates
+    4. Retrieves and saves conversion results
+    5. Handles errors and status notifications
 
-    Worker class is used for concurrency processing.
+    The class supports multiple processor types (local, Docker, remote), various
+    user interfaces (CLI, GUI, web), different savers (local filesystem, cloud),
+    and optional concurrent execution via workers.
+
+    Attributes:
+        interface: User interface implementation for displaying status and results
+        processor: Processing implementation for handling conversion operations
+        saver: Storage implementation for saving converted files
+        worker: Optional worker for concurrent execution
+        config: Current job configuration
+        status: Current conversion status
+
+    Example:
+        >>> from converter import Converter
+        >>> from processors.local_processor import LocalProcessor
+        >>> from uis.cli_ui import ConverterInterfaceCLI
+        >>> from savers.local_saver import LocalFileSaver
+        >>>
+        >>> converter = Converter(
+        ...     interface=ConverterInterfaceCLI(),
+        ...     processor=LocalProcessor(),
+        ...     saver=LocalFileSaver()
+        ... )
+        >>> converter.convert(job_config)
     """
 
     def __init__(
@@ -103,11 +130,11 @@ class Converter:
         """Run different type of covert validation.
 
         Raises:
-            ConvertError: in case of issues with converting.
+            ConverterError: in case of issues with converting.
         """
         if not self.config or not self.config.get_config():
             error_msg = "Converter`s config was not set"
-            raise ConvertError(error_msg)
+            raise ConverterError(error_msg)
 
     @staticmethod
     def validate_path(path_to_file: str) -> bool:
@@ -120,11 +147,11 @@ class Converter:
             return True if all is right.
 
         Raises:
-            ConvertError: raise error if path is not valid.
+            ConverterError: raise error if path is not valid.
         """
         if not Path(path_to_file).is_file():
             msg = "Invalid file path"
-            raise ConvertError(msg)
+            raise ConverterError(msg)
         return True
 
     def get_file_path(self) -> str:
@@ -177,10 +204,7 @@ class Converter:
         3. No need to modify this method when adding new saver types
         """
         # Setup saver with source path and destination from config
-        self.saver.setup(
-            source_path=source_path,
-            destination_path=self.config.path_to_save
-        )
+        self.saver.setup(source_path=source_path, destination_path=self.config.path_to_save)
         result = self.saver.save()
         self.interface.display_job_result(result)
         return result

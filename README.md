@@ -46,7 +46,19 @@ A versatile e-book conversion tool that supports various processing methods and 
     cd e-book-converter
     ```
 
-2.  **Set up Python environment:**
+2.  **Install dependencies:**
+    
+    This project uses `uv` for fast, modern Python package management:
+    
+    ```bash
+    # Install uv if you haven't already
+    pip install uv
+    
+    # Install dependencies
+    uv sync
+    ```
+    
+    Alternatively, using traditional venv and pip:
     ```bash
     python -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`

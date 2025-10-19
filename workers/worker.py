@@ -8,13 +8,24 @@ from functools import wraps
 from typing import Any
 
 from workers.observer import Signal
-from utils import coroutine
+from utils.common_utils import coroutine
 
 _DEFAULT_POOL = ThreadPoolExecutor()
 
 
 def threadpool(func, executor=None):
-    """decorator for long-time operation"""
+    """Decorator for submitting functions to a thread pool executor.
+
+    This decorator automatically submits the decorated function to a thread
+    pool for concurrent execution, useful for I/O-bound or long-running operations.
+
+    Args:
+        func: Function to be executed in the thread pool
+        executor: Optional ThreadPoolExecutor instance (uses default if None)
+
+    Returns:
+        Decorated function that returns a Future object
+    """
 
     @wraps(func)
     def wrap(*args, **kwargs):
@@ -24,39 +35,86 @@ def threadpool(func, executor=None):
 
 
 def threaded(func, daemon=False):
-    """decorator for long-time operation"""
+    """Decorator for executing functions in separate threads with result queuing.
+
+    This decorator runs the decorated function in a new thread and provides
+    a queue-based mechanism for retrieving results. Useful for long-running
+    operations that need to run concurrently with the main thread.
+
+    Args:
+        func: Function to be executed in a separate thread
+        daemon: Whether the created thread should be a daemon thread
+
+    Returns:
+        Decorated function that returns a Thread object with attached result queue
+    """
 
     def wrapped_f(wrapped_q, *args, **kwargs):
-        """this function calls the decorated function and puts the
-        result in a queue
+        """Execute the function and put the result in the queue.
+
+        Args:
+            wrapped_q: Queue to store the function result
+            *args: Positional arguments for the function
+            **kwargs: Keyword arguments for the function
         """
         ret = func(*args, **kwargs)
         wrapped_q.put(ret)
 
     def wrap(*args, **kwargs):
-        """this is the function returned from the decorator. It fires off
-        wrapped_f in a new thread and returns the thread object with
-        the result queue attached
+        """Create and start a new thread for function execution.
+
+        Returns:
+            Thread object with result_queue attribute attached
         """
         queue_q = queue.Queue()
 
-        thread = threading.Thread(
-            target=wrapped_f, args=(queue_q, *args), kwargs=kwargs
-        )
+        thread = threading.Thread(target=wrapped_f, args=(queue_q, *args), kwargs=kwargs)
         thread.daemon = daemon
         thread.start()
-        thread.result_queue = queue
+        setattr(thread, "result_queue", queue_q)  # Dynamically attach result queue
         return thread
 
     return wrap
 
 
 class ThreadError(Exception):
-    pass
+    """Exception raised when thread operations fail or are in invalid state."""
 
 
 class ThreadWorker:
-    """Worker is implemented by threading module"""
+    """Threading-based worker implementation for concurrent task execution.
+
+    This worker provides concurrent execution capabilities using Python's
+    threading module. It allows conversion operations to run in the background
+    while keeping the user interface responsive. The worker handles error
+    propagation and result retrieval through a signal-based mechanism.
+
+    Features:
+        - Background thread execution
+        - Error handling with signal emission
+        - Result storage and retrieval
+        - Completion status checking
+        - Callback-based error handling
+
+    The worker follows a simple lifecycle:
+    1. execute() starts a function in a background thread
+    2. is_completed() checks if execution finished
+    3. get_result() retrieves the function's return value
+    4. Error handlers are called automatically if exceptions occur
+
+    Attributes:
+        _thread: Background thread instance
+        _result: Stored result from function execution
+        _error: Signal object for error handling
+
+    Example:
+        >>> worker = ThreadWorker()
+        >>> worker.set_error_handler(lambda e: print(f"Error: {e}"))
+        >>> worker.execute(some_long_function, arg1, arg2)
+        >>> while not worker.is_completed():
+        ...     time.sleep(0.1)
+        >>> result = worker.get_result()
+    """
 
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
@@ -75,9 +133,7 @@ class ThreadWorker:
         self._error.connect(handler)
 
     def execute(self, func: Callable, *args, **kwargs) -> None:
-        self._thread = threading.Thread(
-            target=self.wrapper, args=(func, *args), kwargs=kwargs
-        )
+        self._thread = threading.Thread(target=self.wrapper, args=(func, *args), kwargs=kwargs)
         self._thread.start()
 
     def wrapper(self, func: Callable, *args, **kwargs) -> None:
@@ -201,6 +257,7 @@ class WorkerCoroutine:
 
 
 if __name__ == "__main__":
+
     def get_response_status(some):
         res = requests.get("http://localhost:5000/", json={"some": some})
         return res, res.json()["status"]["code"]

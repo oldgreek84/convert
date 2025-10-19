@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import ttkbootstrap as ttkb
-from config import ConverterStatus, JobConfig as Config
-from config import Target
 from ttkbootstrap.dialogs import Messagebox
+
+from config import ConverterStatus, Target
+from config import JobConfig as Config
 
 if TYPE_CHECKING:
     from converter import Converter
@@ -29,7 +30,43 @@ CONVERTER_FORMATS_MAPPING = {
 
 
 class ConverterInterfaceTk:
-    """User interface with WM is written by TK python library."""
+    """Tkinter-based graphical user interface for the e-book converter.
+
+    This class provides a modern, user-friendly GUI for the converter using
+    the Tkinter library with ttkbootstrap for enhanced styling. It offers
+    intuitive file selection, format configuration, and real-time progress
+    monitoring through a graphical interface.
+
+    Features:
+        - Modern dark theme with ttkbootstrap
+        - File browser integration for easy file selection
+        - Dropdown menus for format selection with smart defaults
+        - Real-time progress bar and status updates
+        - Threaded execution to prevent UI freezing
+        - Error dialogs and success notifications
+        - Save-as dialog for converted files
+        - Format compatibility validation
+
+    Components:
+        - File selection area with browse button
+        - Format selection dropdowns (from/to)
+        - Convert button with progress indication
+        - Status display and message area
+        - Progress bar for conversion monitoring
+
+    The interface uses the Model-View pattern where this class acts as
+    the controller and TkView handles the actual UI rendering and events.
+
+    Attributes:
+        view: TkView instance handling the UI rendering
+        converter: Reference to the converter instance
+        config: Current job configuration
+
+    Example:
+        >>> interface = ConverterInterfaceTk()
+        >>> converter = Converter(interface, processor, saver)
+        >>> interface.run(converter)
+    """
 
     def __init__(self) -> None:
         self.view: TkView = TkView(self)
@@ -77,9 +114,44 @@ class ConverterInterfaceTk:
         self.view.processing_error(error)
 
 
-# TODO: remove redounded methods
 class TkView:
+    """View component handling the actual Tkinter UI rendering and events.
+
+    This class is responsible for creating and managing all the visual
+    components of the Tkinter interface, handling user interactions,
+    and updating the display based on application state changes.
+
+    The view implements a modern dark-themed interface using ttkbootstrap
+    with organized sections for different functionality areas.
+
+    UI Layout:
+        - Header: Title and instructions
+        - Format Selection: From/To format dropdowns with smart defaults  
+        - File Operations: File browser, path display, convert button
+        - Status Section: Progress bar and status text field
+        - Results Area: Scrollable text area for messages and results
+
+    Features:
+        - Responsive layout with proper spacing
+        - Format compatibility checking and auto-selection
+        - Real-time progress indication
+        - Error and success message dialogs
+        - File save dialog integration
+        - Thread-safe UI updates
+
+    Attributes:
+        interface: Reference to the parent interface controller
+        root: Main window widget using ttkbootstrap theming
+        _config: Internal configuration state storage
+        Various UI components: frames, buttons, text fields, etc.
+    """
+
     def __init__(self, interface: ConverterInterfaceTk) -> None:
+        """Initialize the view with the parent interface.
+
+        Args:
+            interface: Parent ConverterInterfaceTk instance for callbacks
+        """
         self.interface = interface
         self.root = ttkb.Window(title="Simple Converter", themename="darkly")
         self.root.geometry("800x550")
@@ -100,12 +172,12 @@ class TkView:
 
         options = {"from": ["fb2", "txt", "epub", "pdf"], "to": ["mobi", "fb2"]}
 
-        self.selection_from = ttkb.Combobox(self.frame2, bootstyle="info", values=options["from"])
+        self.selection_from = ttkb.Combobox(self.frame2, bootstyle="info", values=options["from"])  # type: ignore[call-arg]
         self.selection_from.grid(column=1, row=0, padx=10)
         self.selection_from.current(0)
         self.selection_from.bind("<<ComboboxSelected>>", self.bind_convert_direction_from)
 
-        self.selection_to = ttkb.Combobox(self.frame2, bootstyle="info", values=options["to"])
+        self.selection_to = ttkb.Combobox(self.frame2, bootstyle="info", values=options["to"])  # type: ignore[call-arg]
         self.selection_to.grid(column=2, row=0, padx=10)
         self.selection_to.current(0)
         self.selection_to.bind("<<ComboboxSelected>>", self.bind_convert_direction_to)
@@ -115,9 +187,9 @@ class TkView:
         self.frame1 = ttkb.Frame(self.root)
         self.frame1.pack(pady=10)
 
-        button_open_file = ttkb.Button(
-            self.frame1, text="Open File", bootstyle="info", command=self.open_file
-        )
+        button_open_file = ttkb.Button(  # type: ignore[call-arg]
+                                       self.frame1, text="Open File", bootstyle="info", command=self.open_file  # type: ignore[call-arg]
+                                       )
         button_open_file.grid(row=0, column=1, padx=10)
 
         # add field to show/select file to convert
@@ -125,17 +197,17 @@ class TkView:
         self.file_field.grid(column=2, row=0, padx=10)
         self.file_field.bind("<Button-1>", lambda event: self.open_file())
 
-        button_convert = ttkb.Button(
-            self.frame1,
-            text="Convert",
-            bootstyle="success, outline",
-            command=self.interface_convert,
-        )
+        button_convert = ttkb.Button(  # type: ignore[call-arg]
+                                     self.frame1,
+                                     text="Convert",
+                                     bootstyle="success, outline",  # type: ignore[call-arg]
+                                     command=self.interface_convert,
+                                     )
         button_convert.grid(row=0, column=3, padx=10)
 
-        button_quit = ttkb.Button(
-            self.frame1, text="Quit", bootstyle="danger", command=self.root.destroy
-        )
+        button_quit = ttkb.Button(  # type: ignore[call-arg]
+                                  self.frame1, text="Quit", bootstyle="danger", command=self.root.destroy  # type: ignore[call-arg]
+                                  )
         button_quit.grid(row=0, column=4, padx=10)
 
         # SET SECTION FOUR

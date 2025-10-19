@@ -1,3 +1,27 @@
+"""E-book Converter Application - Main Entry Point
+
+This module serves as the main entry point for the e-book converter application.
+It provides command-line interface for selecting different UI modes and configures
+the default components for the conversion system.
+
+The application supports multiple user interfaces:
+- CLI: Command-line interface for terminal usage
+- TK: Tkinter-based graphical user interface (default)
+
+Default Configuration:
+- Processor: ProcessorOnDocker (Docker-based conversion)
+- Saver: LocalFileSaver (saves to local filesystem)
+- Worker: ThreadWorker (threaded execution)
+
+Usage:
+    python main.py --ui cli    # Use command-line interface
+    python main.py --ui tk     # Use graphical interface (default)
+    python main.py             # Use graphical interface (default)
+
+The module automatically loads all available formats and initializes the
+converter with appropriate components based on the selected interface.
+"""
+
 import argparse
 import logging
 import formats
@@ -28,8 +52,6 @@ except ImportError as err:
 
 load_dotenv()
 
-
-
 # Load all format modules
 formats.load_formats()
 
@@ -38,6 +60,21 @@ print("Available formats:", list(formats.registry.keys()))
 
 
 def main() -> None:
+    """Main application entry point.
+
+    Parses command-line arguments to determine the user interface type,
+    initializes the converter with appropriate components, and starts
+    the selected interface.
+
+    The function sets up:
+    - Argument parsing for UI selection
+    - Component initialization (processor, saver, worker)
+    - Converter instantiation with dependency injection
+    - Interface startup
+
+    Command-line Arguments:
+        --ui {cli,tk}: User interface type (default: tk)
+    """
     interface = ConverterInterfaceCLI()
     parser = argparse.ArgumentParser(description="E-book Converter Application")
     parser.add_argument(
@@ -58,7 +95,7 @@ def main() -> None:
     processor = ProcessorOnDocker(TextRedirector(interface))
     saver = LocalFileSaver()
 
-    converter = Converter(interface, processor, saver, worker)
+    converter = Converter(interface, processor, saver, worker)  # type: ignore[arg-type]
     interface.run(converter)
 
 

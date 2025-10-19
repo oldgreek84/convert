@@ -1,11 +1,11 @@
-import os.path
+import pathlib
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
 
 from interfaces.saver_interface import SaverProtocol
 import pathlib
@@ -14,6 +14,26 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 
 def init_gdrive_service():
+    """Initialize Google Drive API service with OAuth2 authentication.
+
+    Sets up the Google Drive API client using OAuth2 credentials.
+    Handles the complete authentication flow including token refresh
+    and initial authorization if needed.
+
+    The function looks for credentials.json and token.json in the same
+    directory as this module. If token.json doesn't exist or is expired,
+    it will trigger the OAuth2 flow to obtain new credentials.
+
+    Returns:
+        Authenticated Google Drive service object ready for API calls
+
+    Raises:
+        FileNotFoundError: If credentials.json is not found
+
+    Files Required:
+        credentials.json: OAuth2 client configuration from Google Console
+        token.json: Stored user credentials (created automatically)
+    """
     current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent
     token_path = current_dir / "token.json"
     credentials_path = current_dir / "credentials.json"
@@ -27,43 +47,108 @@ def init_gdrive_service():
             creds.refresh(Request())
         else:
             if not credentials_path.exists():
-                raise FileNotFoundError(f"credentials.json not found at {credentials_path}")
+                msg = f"credentials.json not found at {credentials_path}"
+                raise FileNotFoundError(msg)
 
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             creds = flow.run_local_server(port=0)
 
-        with open(token_path, "w") as token:
+        with pathlib.Path(token_path).open("w") as token:
             token.write(creds.to_json())
 
     return build("drive", "v3", credentials=creds)
 
 
 class GoogleDriveSaver(SaverProtocol):
+    """Google Drive cloud storage implementation of SaverProtocol.
+
+    This saver uploads converted files to Google Drive using the Google Drive API.
+    It handles OAuth2 authentication, file upload with resumable transfers,
+    and provides proper error handling for cloud storage operations.
+
+    Features:
+        - OAuth2 authentication with automatic token refresh
+        - Resumable file uploads for large files
+        - Automatic credential management
+        - Error handling for network and API issues
+        - File metadata and naming control
+
+    Requirements:
+        - Google Drive API enabled in Google Cloud Console
+        - credentials.json file with OAuth2 client configuration
+        - Internet connection for API access
+        - Appropriate Google Drive storage quota
+
+    Attributes:
+        service: Authenticated Google Drive API service instance
+        source_path: Path to the file to be uploaded
+
+    Setup Files:
+        credentials.json: OAuth2 client configuration from Google Console
+        token.json: User authorization token (created automatically)
+
+    Example:
+        >>> saver = GoogleDriveSaver()
+        >>> saver.setup(source_path='/tmp/converted.mobi')
+        >>> result = saver.save()
+        >>> print(f"File uploaded: {result}")
+    """
+
     def __init__(self):
+        """Initialize Google Drive saver with API service."""
         self.service = init_gdrive_service()
         self.source_path = None
 
     def setup(self, **kwargs):
+        """Configure the Google Drive saver with source file path.
+
+        Args:
+            **kwargs: Configuration parameters including:
+                source_path: Path to the file to be uploaded to Google Drive
+
+        Raises:
+            ValueError: If source_path is not provided
+        """
         source_path = kwargs.get("source_path")
         if not source_path:
-            raise ValueError("source_path is required in setup")
+            msg = "source_path is required in setup"
+            raise ValueError(msg)
+
         self.source_path = source_path
 
-    def save(self):
-        source_path = self.source_path
+    def save(self, *, source_path: str | None = None):
+        """Upload the file to Google Drive.
 
-        if not source_path:
-            raise ValueError(
-                "No source_path provided. Call setup() first or pass source_path to save()"
-            )
+        Uploads the specified file to Google Drive using the authenticated
+        service. The file is uploaded with resumable transfer to handle
+        large files efficiently.
 
-        if not os.path.exists(source_path):
-            raise FileNotFoundError(f"Source file not found: {source_path}")
+        Args:
+            source_path: Optional override for the source file path.
+                        If None, uses the path from setup()
 
-        filename = os.path.basename(source_path)
+        Returns:
+            The name of the uploaded file in Google Drive
+
+        Raises:
+            ValueError: If no source path is provided or configured
+            FileNotFoundError: If the source file doesn't exist
+            HttpError: If the Google Drive API request fails
+        """
+        effective_source_path = source_path or self.source_path
+
+        if not effective_source_path:
+            msg = "No source_path provided. Call setup() first or pass source_path to save()"
+            raise ValueError(msg)
+
+        if not pathlib.Path(effective_source_path).exists():
+            msg = f"Source file not found: {effective_source_path}"
+            raise FileNotFoundError(msg)
+
+        filename = pathlib.Path(effective_source_path).name
         file_metadata = {"name": filename}
 
-        media = MediaFileUpload(source_path, resumable=True)
+        media = MediaFileUpload(effective_source_path, resumable=True)
 
         try:
             file = (

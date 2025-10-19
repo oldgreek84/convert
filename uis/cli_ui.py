@@ -1,32 +1,91 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from config import ConverterStatus, JobConfig, ParamsError, Target
-from converter import Converter
-from interfaces.ui_interface import Config
+from config import ConverterStatus, JobConfig, Target
+from exceptions import ParamsError
 from uis import DOCSTRING, InterfaceError
-from utils import get_path, parse_command
+from utils.common_utils import get_path, parse_command
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from converter import Converter
+    from interfaces.ui_interface import Config
 
 
 def yes_no(message="Do you want to run convert[N/y]?: "):
+    """Prompt user for yes/no confirmation.
+
+    Args:
+        message: Prompt message to display to the user
+
+    Returns:
+        True if user responds with 'y' or 'yes', False otherwise
+    """
     return input(message).lower() in {"y", "yes"}
 
 
 class ConverterInterfaceCLI:
-    """Command line interface for converter to use as terminal app."""
+    """Command-line interface implementation for the e-book converter.
+
+    This class provides a text-based interface for interacting with the
+    converter through the terminal or command prompt. It handles command-line
+    argument parsing, user prompts, and text-based status display.
+
+    Features:
+        - Command-line argument parsing
+        - Interactive user prompts for confirmation
+        - Real-time status updates in the terminal
+        - Error message display
+        - File path validation and resolution
+        - Format and category configuration
+
+    The CLI interface supports various usage modes:
+        - Direct command-line execution with arguments
+        - Interactive mode with user prompts
+        - Status monitoring with real-time updates
+        - Error reporting with detailed messages
+
+    Attributes:
+        converter: Reference to the converter instance for operations
+        docstring: Help text for command-line usage
+
+    Example:
+        >>> interface = ConverterInterfaceCLI()
+        >>> converter = Converter(interface, processor, saver)
+        >>> interface.run(converter)
+    """
 
     docstring = DOCSTRING
 
     def __init__(self) -> None:
-        self.converter: None | Converter = None
+        self.converter: Converter | None = None
 
     def _print(self, msg: str) -> None:
-        sys.__stdout__.write(msg + "\n")
-        sys.__stdout__.flush()
+        """Print message to stdout with proper handling.
+
+        Args:
+            msg: Message to print to the console
+        """
+        if sys.__stdout__:
+            sys.__stdout__.write(msg + "\n")
+            sys.__stdout__.flush()
 
     def convert(self, config: Config) -> None:
+        """Initiate conversion process with user feedback.
+
+        Validates the configuration and converter state before starting
+        the conversion process. Displays appropriate error messages
+        if validation fails.
+
+        Args:
+            config: Complete job configuration for the conversion
+
+        Raises:
+            InterfaceError: If converter is not initialized or config is invalid
+        """
         msg = ""
         if not config:
             msg = "There is not config of converter."
@@ -37,6 +96,7 @@ class ConverterInterfaceCLI:
         if msg:
             raise InterfaceError(msg)
 
+        assert self.converter is not None, "Converter should be initialized"
         self.converter.convert(config)
 
     def run(self, converter) -> None:
