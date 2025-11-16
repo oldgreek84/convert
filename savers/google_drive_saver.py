@@ -38,7 +38,7 @@ def init_gdrive_service():
         credentials.json: OAuth2 client configuration from Google Console
         token.json: Stored user credentials (created automatically)
     """
-    current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent
+    current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent / '.creds'
     token_path = current_dir / "token.json"
     credentials_path = current_dir / "credentials.json"
 
