@@ -1,14 +1,18 @@
 import pathlib
+from typing import TYPE_CHECKING
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaIoBaseUpload
+
 
 from interfaces.saver_interface import SaverProtocol
-import pathlib
+
+if TYPE_CHECKING:
+    import io
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -81,7 +85,7 @@ class GoogleDriveSaver(SaverProtocol):
 
     Attributes:
         service: Authenticated Google Drive API service instance
-        source_path: Path to the file to be uploaded
+        source_name: Path to the file to be uploaded
 
     Setup Files:
         credentials.json: OAuth2 client configuration from Google Console
@@ -89,7 +93,7 @@ class GoogleDriveSaver(SaverProtocol):
 
     Example:
         >>> saver = GoogleDriveSaver()
-        >>> saver.setup(source_path='/tmp/converted.mobi')
+        >>> saver.setup(source_name='/tmp/converted.mobi')
         >>> result = saver.save()
         >>> print(f"File uploaded: {result}")
     """
@@ -97,26 +101,34 @@ class GoogleDriveSaver(SaverProtocol):
     def __init__(self):
         """Initialize Google Drive saver with API service."""
         self.service = init_gdrive_service()
-        self.source_path = None
+        self.source_name: str | None = None
+        self.source_data: io.BytesIO | None = None
 
     def setup(self, **kwargs):
         """Configure the Google Drive saver with source file path.
 
         Args:
             **kwargs: Configuration parameters including:
-                source_path: Path to the file to be uploaded to Google Drive
+                source_name: Path to the file to be uploaded to Google Drive
 
         Raises:
-            ValueError: If source_path is not provided
+            ValueError: If source_name is not provided
         """
-        source_path = kwargs.get("source_path")
-        if not source_path:
-            msg = "source_path is required in setup"
+        source_name = kwargs.get("source_name")
+        if not source_name:
+            msg = "source_name is required in setup"
             raise ValueError(msg)
 
-        self.source_path = source_path
+        self.source_name = source_name
 
-    def save(self, *, source_path: str | None = None):
+        source_data = kwargs.get("source_data")
+        if not source_data:
+            msg = "source_data must be provided for LocalFileSaver setup"
+            raise ValueError(msg)
+
+        self.source_data = source_data
+
+    def save(self, *, source_name: str | None = None):
         """Upload the file to Google Drive.
 
         Uploads the specified file to Google Drive using the authenticated
@@ -124,7 +136,7 @@ class GoogleDriveSaver(SaverProtocol):
         large files efficiently.
 
         Args:
-            source_path: Optional override for the source file path.
+            source_name: Optional override for the source file path.
                         If None, uses the path from setup()
 
         Returns:
@@ -135,20 +147,10 @@ class GoogleDriveSaver(SaverProtocol):
             FileNotFoundError: If the source file doesn't exist
             HttpError: If the Google Drive API request fails
         """
-        effective_source_path = source_path or self.source_path
-
-        if not effective_source_path:
-            msg = "No source_path provided. Call setup() first or pass source_path to save()"
-            raise ValueError(msg)
-
-        if not pathlib.Path(effective_source_path).exists():
-            msg = f"Source file not found: {effective_source_path}"
-            raise FileNotFoundError(msg)
-
-        filename = pathlib.Path(effective_source_path).name
+        filename = self.source_name
         file_metadata = {"name": filename}
 
-        media = MediaFileUpload(effective_source_path, resumable=True)
+        media = MediaIoBaseUpload(self.source_data, resumable=True, mimetype="text/plain")
 
         try:
             file = (
@@ -167,6 +169,6 @@ class GoogleDriveSaver(SaverProtocol):
 
 if __name__ == "__main__":
     s = GoogleDriveSaver()
-    s.setup(source_path="test_file.txt")
+    s.setup(source_name="test_file.txt")
     res = s.save()
     print(f"Uploaded file ID: {res}")
