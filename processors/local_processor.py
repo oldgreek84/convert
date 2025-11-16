@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
 import subprocess
-from pathlib import Path, PosixPath
-from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class LocalProcessor(JobProcessor):
@@ -55,12 +58,12 @@ class LocalProcessor(JobProcessor):
         """
         return self.processes[job_id][0]
 
-    def send_job(self, filename: str, options: dict | None = None) -> int:
-        if options is None:
-            options = {}
+    def send_job(self, filename: str, format_options: dict | None = None) -> int:
+        if format_options is None:
+            format_options = {}
 
         # setup command params to processing job
-        params = self._prepare_command(filename, options)
+        params = self._prepare_command(filename, format_options)
         command, file_to_save = params["command"], params["file_to_save"]
 
         try:
@@ -152,7 +155,7 @@ class LocalProcessor(JobProcessor):
             ProcessorError: If job not found or conversion failed
         """
         try:
-            process, result = self.processes[job_id]
+            process, filename = self.processes[job_id]
         except KeyError as err:
             msg = "Processor did not find"
             raise ProcessorError(msg) from err
@@ -166,37 +169,8 @@ class LocalProcessor(JobProcessor):
             msg = f"ERROR IN RESULTS {process.stderr or ''}"
             raise ProcessorError(msg)
 
-        return result
+        return self._prepare_result_bytes(filename)
 
-    def save_file(self, path_to_result: str, path_to_save: str | Path) -> str | Path | PosixPath:
-        """Save the conversion result to the specified destination.
-
-        Args:
-            path_to_result: Source path of the converted file
-            path_to_save: Destination directory for the file
-
-        Returns:
-            Final path where the file has been saved
-        """
-        return self._resolve_path(path_to_result, path_to_save)
-
-    @staticmethod
-    def _resolve_path(path_to_result: str, destination_dir: str | Path) -> str | Path | PosixPath:
-        """Move the converted file to the destination directory.
-
-        Creates the destination directory if it doesn't exist and moves
-        the source file to the new location.
-
-        Args:
-            path_to_result: Source file path
-            destination_dir: Target directory path
-
-        Returns:
-            Final path where the file has been moved
-        """
-        source_path = Path(path_to_result)
-        destination_path = Path(destination_dir)
-        destination_path.mkdir(parents=True, exist_ok=True)
-        new_file_path = destination_path / source_path.name
-        source_path.rename(new_file_path)
-        return new_file_path
+    def _prepare_result_bytes(self, filename):
+        with open(filename, 'rb') as source_data:
+            return filename, io.BytesIO(source_data.read())

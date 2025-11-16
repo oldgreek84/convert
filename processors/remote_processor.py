@@ -3,14 +3,18 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import TYPE_CHECKING, TextIO
+import io
+from typing import TYPE_CHECKING, TextIO, Any
 
 import requests
+
+from dataclasses import dataclass
 
 from config import APIConfig, ConverterStatus
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
 from utils.common_utils import get_full_file_path, save_data_from_response_to_dir
+from exceptions import APIConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -19,146 +23,62 @@ if TYPE_CHECKING:
 PROCESSOR_TIMEOUT = 3
 
 
-# TODO: make JobProcessor more generic - use API Config classes for the implementation
-#       possibility to use different APIs without changing of this class
-class JobProcessorRemote(JobProcessor):
-    """Remote processor implementation using external conversion APIs.
+@dataclass
+class ApiStatus:
+    status_code: int
+    info: dict
+    job_id: int | str
+    status: ConverterStatus
 
-    This processor communicates with remote conversion services via HTTP APIs,
-    allowing conversion operations to be performed on external servers. It handles
-    file upload, job monitoring, and result retrieval through REST API calls.
 
-    Features:
-        - HTTP-based API communication
-        - Asynchronous job monitoring with polling
-        - File upload and download handling
-        - Status mapping from API responses
-        - Configurable timeout and retry logic
+class GenericAPIServiceInterface:
+    def get_options(self, key):
+        raise NotImplementedError
 
-    The processor follows a typical remote job workflow:
-    1. Upload file and create conversion job
-    2. Poll job status until completion
-    3. Download converted file result
-    4. Handle errors and timeouts
+    def send_job(self, path_to_file, file_data: TextIO, options: dict):
+        raise NotImplementedError
 
-    Attributes:
-        api_config: Configuration for API authentication and endpoints
-        _status: Current job status for completion checking
+    def get_job_status(self, job_id):
+        raise NotImplementedError
 
-    Example:
-        >>> config = APIConfig(token='api-key', url='https://api.converter.com')
-        >>> processor = JobProcessorRemote(config)
-        >>> job_id = processor.send_job('book.fb2', {'target': 'mobi'})
-    """
+    def get_job_result(self, job_id):
+        raise NotImplementedError
 
-    def __init__(self, api_config: APIConfig = APIConfig()) -> None:
-        """Initialize the remote processor with API configuration.
+    def prepare_result(self, result):
+        raise NotImplementedError
 
-        Args:
-            api_config: API configuration containing authentication and endpoint details.
-                       Defaults to environment-based configuration if not provided.
-        """
-        super().__init__()
-        self.api_config = api_config
-        self._status = None
 
-    def set_status(self, status: str) -> None:
-        """Update the current job status.
-
-        Args:
-            status: New status value for the current job
-        """
-        self._status = status
-
-    def send_job(self, filename: str, options: dict | None = None) -> int:
-        """Submit a file for remote conversion processing.
-
-        Uploads the specified file to the remote conversion service and
-        creates a new conversion job with the provided options.
-
-        Args:
-            filename: Path to the source file to be converted
-            options: Dictionary containing conversion parameters
-
-        Returns:
-            Unique job identifier assigned by the remote service
-        """
-        if options is None:
-            options = {}
-
-        with open(filename) as f:
-            return self._send_job_data(filename, f, options)
-
-    def get_job_status(self, job_id: int) -> Generator:
-        """Monitor the progress of a remote conversion job.
-
-        Polls the remote service for job status updates until the job completes.
-        Yields status information messages for UI display.
-
-        Args:
-            job_id: Unique identifier of the job to monitor
-
-        Yields:
-            Status information messages from the remote service
-
-        Note:
-            This method blocks with periodic polling intervals defined by PROCESSOR_TIMEOUT
-        """
-        while not self.is_completed():
-            time.sleep(PROCESSOR_TIMEOUT)
-            status_info = self._get_job_status(job_id)
-            status = self._prepare_status(status_info["code"])
-            self.set_status(status)
-            yield status_info["info"]
-
-    @staticmethod
-    def _prepare_status(status_code: str) -> ConverterStatus:
-        """Map remote API status codes to internal ConverterStatus enum values.
-
-        Args:
-            status_code: Status code string from the remote API
-
-        Returns:
-            Corresponding ConverterStatus enum value, defaults to FAILED for unknown codes
-        """
-        codes_map = {
-            "ready": ConverterStatus.READY,
-            "completed": ConverterStatus.COMPLETED,
-            "processing": ConverterStatus.PROCESSING,
-            "error": ConverterStatus.FAILED,
+# TODO: add api registry
+class ApiServiceCur(GenericAPIServiceInterface):
+    def __init__(self, token=None, url=None):
+        self.status_options = {
+            'timeout': PROCESSOR_TIMEOUT
         }
-        return codes_map.get(status_code, ConverterStatus.FAILED)
+        self.token = token or os.environ.get("API_KEY")
+        self.url = url or os.environ.get("CONVERTER_URL")
+        self.headers = {
+            "main_header": {
+                "cache-control": "no-cache",
+                "content-type": "application/json",
+                "x-oc-api-key": self.token,
+            },
+            "cache_header": {"cache-control": "no-cache", "x-oc-api-key": self.token},
+        }
 
-    def is_completed(self) -> bool:
-        """Check if the current job has completed processing.
+    @property
+    def timeout(self):
+        return self.get_options('timeout')
 
-        Returns:
-            True if the job status is COMPLETED, False otherwise
-        """
-        return self._status == ConverterStatus.COMPLETED
+    def get_options(self, key):
+        if self.status_options.get(key):
+            return self.status_options[key]
 
-    def _send_job_data(self, path_to_file: str, file_data: TextIO, options: dict) -> int:
-        """Send file and conversion options to remote API to create a job.
+        return getattr(self, key, None)
 
-        Args:
-            path_to_file: Path to the source file being converted
-            file_data: Open file object for reading file contents
-            options: Dictionary of conversion options
+    def get_header(self, key):
+        return self.headers.get(key, {})
 
-        Returns:
-            Job ID assigned by the remote service
-        """
-        # get server`s options for convert
-        job_id, server_url = self._get_job_id_from_server(self._set_data_options(options))
-        url_upload = self._set_upload_url(job_id, server_url)
-
-        # send file data to server
-        self._send_file_to_server(url_upload, path_to_file, file_data)
-        return job_id
-
-    @staticmethod
-    def _set_data_options(options: dict) -> str:
-        """return json-like object of converter options"""
+    def send_job(self, path_to_file: str, file_data: TextIO, options: dict):
         data = {
             "conversion": [
                 {
@@ -168,154 +88,198 @@ class JobProcessorRemote(JobProcessor):
                 }
             ]
         }
-        return json.dumps(data)
-
-    def _get_job_id_from_server(self, options_data: str) -> tuple[int, str]:
-        """Send request to create remote job
-
-        Args:
-            options_data: json string with parameters target and category
-
-        Returns:
-            job server url and job id
-
-        Raises:
-            ProcessorError: if url of the remote processor is not set.
-        """
-        url = self.api_config.url
-        if not url:
-            msg = "API URL not configured"
-            raise ProcessorError(msg)
 
         response = requests.post(
-            url,
-            headers=self.api_config.get_header("main_header"),
-            data=options_data,
+            self.url,
+            headers=self.get_header("main_header"),
+            data=json.dumps(data),
             timeout=PROCESSOR_TIMEOUT,
         )
 
         data: dict = response.json()
-        return data["id"], data["server"]
+        job_id, server_url = data["id"], data["server"]
+        upload_url = f"{server_url}/upload-file/{job_id}"
 
-    @staticmethod
-    def _set_upload_url(job_id: int, server_url: str) -> str:
-        """Construct the file upload URL for a specific job.
-
-        Args:
-            job_id: Unique job identifier
-            server_url: Base URL of the remote server
-
-        Returns:
-            Complete upload endpoint URL
-        """
-        return f"{server_url}/upload-file/{job_id}"
-
-    def _send_file_to_server(self, server_url: str, path_to_file: str, file_data: TextIO) -> dict:
-        """sends file data to remote API"""
         response = requests.post(
-            server_url,
-            headers=self.api_config.get_header("cache_header"),
+            upload_url,
+            headers=self.get_header("cache_header"),
             files={"file": (path_to_file, file_data)},
             timeout=PROCESSOR_TIMEOUT,
         )
 
-        return response.json().get("completed")
+        return job_id
 
-    def _get_job_status(self, job_id: int) -> dict:
-        """Retrieve status information for a specific job.
-
-        Args:
-            job_id: Unique job identifier
-
-        Returns:
-            Status dictionary containing code and info fields
-        """
-        res = self._get_job_info(job_id)
-        return res["status"]
-
-    def get_job_result(self, job_id: int) -> str:
-        """Retrieve the result URL for a completed conversion job.
-
-        Args:
-            job_id: Unique identifier of the completed job
-
-        Returns:
-            URL where the converted file can be downloaded
-        """
-        return self._get_job_result(job_id)
-
-    def _get_job_result(self, job_id: int) -> str:
-        """Extract the result URI from job information.
-
-        Args:
-            job_id: Unique job identifier
-
-        Returns:
-            URI of the converted file output
-        """
-        res = self._get_job_info(job_id)
-        return res["output"][0]["uri"]
-
-    def _get_job_info(self, job_id: int) -> dict:
-        """sends request to server with unique id
-        and return response with status code
-        """
+    def get_job_status(self, job_id):
         response = requests.get(
-            f"{self.api_config.url}/{job_id}",
-            headers=self.api_config.get_header("main_header"),
+            f"{self.url}/{job_id}",
+            headers=self.get_header("main_header"),
             timeout=PROCESSOR_TIMEOUT,
         )
 
-        res = response.json()
-        self._check_errors(res)
-        return res
+        data = response.json()
 
-    def _check_errors(self, data: dict) -> None:
-        """Check API response for errors and raise exception if found.
-
-        Args:
-            data: Response data from the remote API
-
-        Raises:
-            ProcessorError: If the response contains error information
-        """
         is_error = data["status"]["code"] == "error" or data["errors"]
-        if not is_error:
-            return
+        if is_error:
+            msg = f"ERROR: {self._get_error_info(data)}"
+            raise ProcessorError(msg)
 
-        msg = f"ERROR: {self._get_error_info(data)}"
-        raise ProcessorError(msg)
+        codes_map = {
+            "ready": ConverterStatus.READY,
+            "completed": ConverterStatus.COMPLETED,
+            "processing": ConverterStatus.PROCESSING,
+            "error": ConverterStatus.FAILED,
+        }
+        con_status = codes_map.get(data['status']['code'], ConverterStatus.FAILED)
+        self._status = con_status
+        return ApiStatus(response.status_code, data['status']['info'], job_id, con_status)
 
-    @staticmethod
-    def _get_error_info(data: dict) -> list[str | None]:
-        """Extract error information from API response.
+    def get_job_result(self, job_id):
+        response = requests.get(
+            f"{self.url}/{job_id}",
+            headers=self.get_header("main_header"),
+            timeout=PROCESSOR_TIMEOUT,
+        )
 
-        Args:
-            data: Response data containing error details
+        data = response.json()
+        is_error = data["status"]["code"] == "error" or data["errors"]
+        if is_error:
+            msg = f"ERROR: {self._get_error_info(data)}"
+            raise ProcessorError(msg)
 
-        Returns:
-            List containing error messages or status codes
-        """
-        return [data["errors"] or data["status"]["code"]]
+        return data['output'][0]['uri']
 
-    def save_file(self, path_to_result: str, path_to_save: str | Path) -> str | PosixPath | Path:
-        """Save the converted file from a remote URL to local filesystem.
+    def prepare_result(self, result):
+        url = result
+        filename = url.split("/")[-1] if url else ""
+        try:
+            response = requests.get(url, stream=True, timeout=self.timeout)
+            response.raise_for_status()
+            return filename, io.BytesIO(response.content)
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching URL: {e}")
+            return None, None
 
-        Args:
-            path_to_result: URL of the converted file on the remote server
-            path_to_save: Local directory path where the file should be saved
 
-        Returns:
-            Full path to the saved file
-        """
-        return self._save_from_url(path_to_result, path_to_save)
+class ApiAdapter:
+    def __init__(self, service: GenericAPIServiceInterface):
+        self._service = service
+        self.max_retrises = 3
 
-    # TODO: check func from utils for this processing or replace it here
-    @staticmethod
-    def _save_from_url(url: str, sub_dir: str | Path = os.path.curdir) -> str | PosixPath | Path:
-        """saves file form remote URL to directory"""
-        filename = url.split("/", maxsplit=1)[-1] if url else ""
-        full_path = get_full_file_path(filename, sub_dir)
-        response = requests.get(url, stream=True)
-        save_data_from_response_to_dir(full_path, response)
-        return full_path
+    def setup(self, **kwargs) -> None:
+        pass
+
+    def prepare_options(self, format_options: dict) -> dict:
+        return dict(format_options)
+
+    def send_job(self, file_name: str, file_data: io.IOBase, options: dict) -> int | str:
+        return self._service.send_job(file_name, file_data, options)
+
+    def get_options(self, key: Any, default: Any | None = None) -> Any:
+        try:
+            return self._service.get_options(key)
+        except KeyError:
+            return default
+
+    def get_status(self, job_id: int|str) -> ApiStatus:
+        return self._service.get_job_status(job_id)
+
+    def get_job_result(self, job_id: int| str) -> tuple(str, io.BytesIO):
+        result = self._service.get_job_result(job_id)
+        return self._service.prepare_result(result)
+
+    # def prepare_params(self, params):
+    #     return self._service._prepare_send_params(params)
+    #
+    # def check_errors(self, data: dict) -> None:
+    #     self._service.check_errors(data)
+    #
+    # def send_request(self, request_type, **params):
+    #     return self
+    #
+    # def post_process_response(self, response):
+    #     return self._service.process(response)
+    # def _get(self, **params):
+    #     params = {
+    #         'url': self._service.main_api_url,
+    #         **params,
+    #     }
+    #     return requests.get(
+    #         params['url'],
+    #         timeout=params['timeout'],
+    #     )
+    #
+    # def _post(self, **params):
+    #     params = {
+    #         'url': self._service.main_api_url,
+    #         **params,
+    #         **self._service.prepare_params(),
+    #     }
+    #     try:
+    #         res = requests.post(
+    #             params['url'],
+    #             headers=self._service.get_header(),
+    #             # data=params['data'],
+    #             timeout=params['timeout'],
+    #             **params,
+    #         )
+    #         if res.status_code not in ('200', '201'):
+    #             return []
+    #         return res.json()
+    #
+    #     except requests.exceptions.ConnectTimeout:
+    #         while self.max_retrises > 0:
+    #             time.sleep(3)
+    #             self.max_retrises -= 1
+    #             self._post(**params)
+    #
+    #     except Exception as err:
+    #         print(f"Error: {err}")
+    #         return []
+
+
+# TODO: make options maybe as dataclass or separated class of format
+# because in this case options is a params to convert
+class GenericRemoteProcessor(JobProcessor):
+    def __init__(self, service, init=False):
+        self.api_adapter = ApiAdapter(service)
+        self._status = ConverterStatus.READY
+
+        if init:
+            self.setup()
+
+    def setup(self):
+        if not self.api_adapter:
+            msg = 'API service is not setup.'
+            raise APIConfigError(msg)
+
+        self.api_adapter.setup()
+
+    def send_job(self, filename: str, format_options: dict | None = None) -> int:
+        if format_options is None:
+            format_options = {}
+
+        options = self.api_adapter.prepare_options(format_options)
+
+        with open(filename) as file_obj:
+            return self.api_adapter.send_job(filename, file_obj, options)
+
+    def get_job_status(self, job_id: int) -> Generator:
+        result = None
+        while not self.is_completed(result):
+            time.sleep(self.api_adapter.get_options('timeout'))
+            result: ApiStatus = self.api_adapter.get_status(job_id)
+            self.set_status(result.status)
+            yield result.info
+
+    def get_job_result(self, job_id: int) -> tuple(str, io.BytesIO):
+        return self.api_adapter.get_job_result(job_id)
+
+    def set_status(self, status: ConverterStatus) -> None:
+        self._status = status
+
+    def is_completed(self, api_result: ApiStatus | None = None) -> bool:
+        if api_result is None:
+            return False
+
+        requests_result = api_result.status_code
+        return api_result.status == ConverterStatus.COMPLETED and requests_result == 200

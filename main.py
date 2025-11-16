@@ -25,13 +25,14 @@ converter with appropriate components based on the selected interface.
 import argparse
 import logging
 import formats
+import os
 
 from config import APIConfig
 from converter import Converter
 
 from processors.local_processor import LocalProcessor
 from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
-from processors.remote_processor import JobProcessorRemote
+from processors.remote_processor import GenericRemoteProcessor, ApiServiceCur
 
 from savers.local_saver import LocalFileSaver
 from savers.google_drive_saver import GoogleDriveSaver
@@ -75,27 +76,36 @@ def main() -> None:
     Command-line Arguments:
         --ui {cli,tk}: User interface type (default: tk)
     """
+    # parser = argparse.ArgumentParser(description="E-book Converter Application")
+    # parser.add_argument(
+    #     "--ui",
+    #     type=str,
+    #     choices=["cli", "tk"],
+    #     default="tk",
+    #     help="Choose the user interface: 'cli' for Command-Line, 'tk' for Tkinter GUI",
+    # )
+    # args = parser.parse_args()
+    #
+    # if args.ui == "cli":
+    #     interface = ConverterInterfaceCLI()
+    # else:
+    #     interface = ConverterInterfaceTk()
+
+    # Step 1: setup interface
     interface = ConverterInterfaceCLI()
-    parser = argparse.ArgumentParser(description="E-book Converter Application")
-    parser.add_argument(
-        "--ui",
-        type=str,
-        choices=["cli", "tk"],
-        default="tk",
-        help="Choose the user interface: 'cli' for Command-Line, 'tk' for Tkinter GUI",
-    )
-    args = parser.parse_args()
 
-    if args.ui == "cli":
-        interface = ConverterInterfaceCLI()
-    else:
-        interface = ConverterInterfaceTk()
-
-    worker = ThreadWorker()
+    # Step 2: setup main processor
     processor = ProcessorOnDocker(TextRedirector(interface))
+    # processor = GenericRemoteProcessor(ApiServiceCur())
+
+    # Step 3: setup saver
     saver = LocalFileSaver()
 
+    # Step 4: setup Converter with required params and non-blocking worker
+    worker = ThreadWorker()
     converter = Converter(interface, processor, saver, worker)  # type: ignore[arg-type]
+
+    # Step 5: run converter with interface
     interface.run(converter)
 
 

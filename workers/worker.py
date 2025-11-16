@@ -1,14 +1,15 @@
 import queue
 import threading
 import time
-import requests
 from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from typing import Any
 
-from workers.observer import Signal
+import requests
+
 from utils.common_utils import coroutine
+from workers.observer import Signal
 
 _DEFAULT_POOL = ThreadPoolExecutor()
 

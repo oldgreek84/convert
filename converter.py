@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import traceback
+import sys
+import os
+import io
+
 from functools import partial
 from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING, Any
@@ -92,17 +97,14 @@ class Converter:
         self.set_status(ConverterStatus.PROCESSING)
         self.set_config(config)
 
-        run_process = self.set_converter_executor()
-        try:
-            run_process()
-        except Exception as ex:
-            self.error_handler(ex)
+        run_process = self.setup_converter_executor()
+        run_process()
 
     def set_config(self, config: Config) -> None:
         """Set converter configuration."""
         self.config = config
 
-    def set_converter_executor(self) -> Callable:
+    def setup_converter_executor(self) -> Callable:
         """Return Callable object to processing main flow."""
         executor = self._convert
         if self.worker:
@@ -112,18 +114,23 @@ class Converter:
 
     def _convert(self) -> None:
         # validate config
+        print(f"----- 1:")
         self.validate_config()
 
+        print(f"----- 2:")
         # send file to processor
         job_id = self.send_job()
+        print(f"----- 3: {job_id}")
 
         # check processing result and get it path
-        result = self.get_result(job_id)
+        result_file_name, source_data = self.get_result(job_id)
+        print(f"----- 4: {result_file_name} {source_data}")
 
         # save result file
-        if result:
-            self.save(result)
+        if result_file_name:
+            self.save(result_file_name, source_data)
 
+        print(f"----- 5:")
         self.set_status(ConverterStatus.COMPLETED)
 
     def validate_config(self) -> None:
@@ -150,7 +157,7 @@ class Converter:
             ConverterError: raise error if path is not valid.
         """
         if not Path(path_to_file).is_file():
-            msg = "Invalid file path"
+            msg = f"Invalid file path: {path_to_file}"
             raise ConverterError(msg)
         return True
 
@@ -166,6 +173,7 @@ class Converter:
         """Send job data to processor. Return job ID"""
         # setup converter options
         path_to_file = self.get_file_path()
+        print(f"----- send_job: {path_to_file=}")
         self.validate_path(path_to_file)
         options = self.get_job_options()
 
@@ -177,8 +185,9 @@ class Converter:
 
         return job_id
 
-    def get_result(self, job_id: int) -> str:
-        """Get job result from processor. Return path to converted file"""
+    def get_result(self, job_id: int) -> tuple(str, io.BytesIO):
+        """Get job result from processor. Return path to converted file
+        and bytes data in stream"""
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)
@@ -192,10 +201,13 @@ class Converter:
 
     def error_handler(self, error: Exception) -> None:
         """Send error from converter to user interface."""
+        if os.getenv('DEBUG') == '1':
+            error.with_traceback(sys.exc_info()[2])
+
         self.set_status(ConverterStatus.FAILED)
         self.interface.display_error(f"Converter got an error: {error}", ConverterStatus.FAILED)
 
-    def save(self, source_path: str) -> str | Path | PosixPath:
+    def save(self, source_name: str, source_data: io.BytesIO) -> str | Path | PosixPath:
         """Save result of processing.
 
         This method now follows the open-closed principle by:
@@ -204,7 +216,11 @@ class Converter:
         3. No need to modify this method when adding new saver types
         """
         # Setup saver with source path and destination from config
-        self.saver.setup(source_path=source_path, destination_path=self.config.path_to_save)
+        self.saver.setup(
+            source_name=source_name,
+            source_data=source_data,
+            destination_path=self.config.path_to_save,
+        )
         result = self.saver.save()
         self.interface.display_job_result(result)
         return result

@@ -19,7 +19,6 @@ class JobProcessor(ABC):
     1. Send a conversion job with file and options
     2. Monitor job status until completion
     3. Retrieve the conversion result
-    4. Optionally save the result to a specific location
 
     Implementations must handle their specific processing environments while
     maintaining a consistent interface for the Converter class.
@@ -28,21 +27,20 @@ class JobProcessor(ABC):
         send_job: Submit a file for conversion processing
         get_job_status: Monitor the progress of a conversion job
         get_job_result: Retrieve the converted file path or data
-        save_file: Save the conversion result to a specified location
     """
 
     @abstractmethod
-    def send_job(self, filename: str, options: dict | None = None) -> int:
+    def send_job(self, filename: str, format_options: dict | None = None) -> int:
         """Submit a file for conversion processing.
 
-        Initiates a conversion job with the specified file and conversion options.
+        Initiates a conversion job with the specified file and conversion format_options.
         The implementation should validate the file, prepare necessary resources,
         and start the conversion process.
 
         Args:
             filename: Path to the source file to be converted
-            options: Dictionary containing conversion parameters like target format,
-                    category, and format-specific options
+            format_options: Dictionary containing conversion parameters like target format,
+                    category, and format-specific format_options
 
         Returns:
             Unique job identifier for tracking the conversion progress
@@ -71,7 +69,7 @@ class JobProcessor(ABC):
         """
 
     @abstractmethod
-    def get_job_result(self, job_id: int) -> str:
+    def get_job_result(self, job_id: int) -> tuple(str, io.BytesIO):
         """Retrieve the result of a completed conversion job.
 
         Returns the path or location of the converted file after successful
@@ -87,24 +85,4 @@ class JobProcessor(ABC):
         Raises:
             ProcessorError: If the job failed, is not complete, or result
                            cannot be retrieved
-        """
-
-    @abstractmethod
-    def save_file(self, path_to_result: str, path_to_save: str | Path) -> str | Path | PosixPath:
-        """Save the conversion result to a specified location.
-
-        Moves or copies the converted file from the processor's working location
-        to the desired destination. This method handles the final step of making
-        the converted file available to the user.
-
-        Args:
-            path_to_result: Source path where the converted file is located
-            path_to_save: Destination directory or path for the final file
-
-        Returns:
-            Final path where the file has been saved
-
-        Raises:
-            ProcessorError: If the file cannot be saved due to permissions,
-                           disk space, or other I/O issues
         """

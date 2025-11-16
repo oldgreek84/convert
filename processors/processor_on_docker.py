@@ -205,13 +205,13 @@ class ProcessorOnDocker(LocalProcessor):
         """
         self.client = new_client
 
-    def send_job(self, filename: str, options: dict | None = None) -> int:
+    def send_job(self, filename: str, format_options: dict | None = None) -> int:
         self.client = init_container(rebuild=False, callback=self.set_docker_client)
-        if options is None:
-            options = {}
+        if format_options is None:
+            format_options = {}
 
         # setup command params to processing job
-        params = self._prepare_command(filename, options)
+        params = self._prepare_command(filename, format_options)
         command, file_to_save = params["command"], params["file_to_save"]
 
         path_to_mount = Path(filename).parents[0].absolute()
@@ -254,13 +254,14 @@ class ProcessorOnDocker(LocalProcessor):
             KeyError: If key is missed in containers dict.
         """
         try:
-            container, result = self.containers[job_id]
+            container, filename = self.containers[job_id]
         except KeyError as err:
-            msg = "Processor did not find"
+            msg = f"Container was not found [{job_id}]"
             raise KeyError(msg) from err
 
         container.remove()
-        return result
+
+        return self._prepare_result_bytes(filename)
 
 
 if __name__ == "__main__":
