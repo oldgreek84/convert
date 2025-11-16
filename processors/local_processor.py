@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
+import pathlib
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -171,6 +172,11 @@ class LocalProcessor(JobProcessor):
 
         return self._prepare_result_bytes(filename)
 
-    def _prepare_result_bytes(self, filename):
-        with open(filename, 'rb') as source_data:
-            return filename, io.BytesIO(source_data.read())
+    @staticmethod
+    def _prepare_result_bytes(filename):
+        try:
+            with open(filename, 'rb') as source_data:
+                return filename, io.BytesIO(source_data.read())
+        finally:
+            if pathlib.Path(filename).exists():
+                pathlib.Path(filename).unlink()

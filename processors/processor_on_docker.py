@@ -260,7 +260,6 @@ class ProcessorOnDocker(LocalProcessor):
             raise KeyError(msg) from err
 
         container.remove()
-
         return self._prepare_result_bytes(filename)
 
 
