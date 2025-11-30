@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import ConverterStatus, JobConfig, Target
+from config import ConverterStatus, JobConfig
 from exceptions import ParamsError
+from formats.service import format_service
 from uis import DOCSTRING, InterfaceError
 from utils.common_utils import get_path, parse_command
 
 if TYPE_CHECKING:
-    from pathlib import Path
 
     from converter import Converter
     from interfaces.ui_interface import Config
@@ -96,7 +97,6 @@ class ConverterInterfaceCLI:
         if msg:
             raise InterfaceError(msg)
 
-        assert self.converter is not None, "Converter should be initialized"
         self.converter.convert(config)
 
     def run(self, converter) -> None:
@@ -120,18 +120,44 @@ class ConverterInterfaceCLI:
             msg = f"Not enough params {args}"
             raise ParamsError(msg)
 
-        data_settings = parse_command()
-        if data_settings.get("-path"):
-            working_file_path = data_settings["-path"]
-        elif data_settings.get("-name"):
-            working_file_path = get_path(data_settings["-name"])
+        params_data = parse_command()
+        if params_data.get("-path"):
+            working_file_path = params_data["-path"]
+        elif params_data.get("-name"):
+            working_file_path = get_path(params_data["-name"])
         else:
             working_file_path = sys.argv[1]
 
-        working_target = data_settings.get("-t", "mobi")
-        working_category = data_settings.get("-cat", "ebook")
+        format_from_name = Path(working_file_path).suffix.lstrip('.')
+        format_from = format_service.get_source_format(format_from_name)
 
-        target_object = Target(working_target, working_category)
+        available_targets = format_service.list_available_targets(format_from)
+        if not available_targets:
+            raise ParamsError(f"No conversion targets available for {format_from_name}")
+
+        choices = {}
+        self.display_common_info("Available conversion formats:")
+        for indx, metadata in enumerate(available_targets, start=1):
+            self.display_common_info(f"  {indx}. {metadata}")
+            choices[str(indx)] = metadata
+
+        while True:
+            result_enter = input('Enter format number: ').strip()
+            if result_enter in choices:
+                break
+
+            self.display_common_info(f"Invalid choice '{result_enter}'. Please enter a number from 1 to {len(choices)}")
+
+        chosen_metadata = choices[result_enter]
+        self.display_common_info(f"Selected: {chosen_metadata.display_name}")
+
+        format_to_name = choices[result_enter].name
+        format_to = format_service.get_target_format(format_to_name, **params_data)
+        format_service.validate_conversion(format_from_name, format_to_name)
+
+        target_object = format_service.create_target_object(format_to.name, **params_data)
+        working_target = target_object.target
+        working_category = target_object.category
 
         msg = f"\n{'=' * 80}\nPARAMS:\
                 \n\t{working_file_path = }\

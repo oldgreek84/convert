@@ -1,13 +1,38 @@
+"""Format registration and management package.
+
+This package provides the format registry system, including:
+- FormatRepository: Storage and retrieval of format classes
+- FormatService: Business logic for format operations
+- FormatMetadata: Immutable format information
+- register_format: Decorator for registering format classes
+
+Usage:
+    from formats import register_format, format_service
+
+    @register_format('pdf', display_name='PDF', description='PDF format')
+    class PdfFormat(Format):
+        ...
+
+    # Get a format instance
+    pdf = format_service.get_source_format('pdf')
+"""
+
+from __future__ import annotations
+
 import importlib
 import pkgutil
+from typing import TYPE_CHECKING, Callable
 
-from abc import abstractmethod, ABC
-from functools import wraps
+from formats.repository import FormatRepository
 
-registry = {}
+if TYPE_CHECKING:
+    from interfaces.format_instance import Format
+
+# Global registry instance
+registry = FormatRepository()
 
 
-def load_formats():
+def load_formats() -> None:
     """Dynamically load all format modules and register their format classes.
 
     This function imports all Python modules in the formats package,
@@ -24,115 +49,52 @@ def load_formats():
         - Executes @register_format decorators
         - Populates the global format registry
     """
-    # Import all submodules in the formats package
     for _, module_name, _ in pkgutil.iter_modules(__path__):
         full_name = f"{__name__}.{module_name}"
         importlib.import_module(full_name)
 
 
-def register_format(format_name):
-    """Decorator to register a format class in the global format registry.
+def register_format(
+    name: str,
+    display_name: str | None = None,
+    description: str | None = None,
+) -> Callable[[type[Format]], type[Format]]:
+    """Decorator factory for registering format classes.
 
-    This decorator registers format classes with their string identifiers,
-    enabling dynamic format discovery and instantiation. The decorator
-    wraps the class constructor to ensure proper initialization and
-    name assignment.
+    Creates a decorator that registers the decorated class with the
+    global format registry, along with its display name and description.
 
     Args:
-        format_name: String identifier for the format (e.g., 'fb2', 'mobi')
+        name: Unique identifier for the format (e.g., 'pdf', 'mobi')
+        display_name: Human-readable name for display (optional)
+        description: Brief description of the format (optional)
 
     Returns:
-        Decorator function that registers the class and returns a wrapper
+        A decorator function that registers the class
 
     Example:
-        >>> @register_format('epub')
-        ... class EpubFormat(Format):
-        ...     def allowed_formats(self):
-        ...         return ['mobi', 'pdf']
+        @register_format('pdf', display_name='PDF', description='PDF format')
+        class PdfFormat(Format):
+            ...
     """
 
-    def my_decorator(aclass):
-        @wraps(aclass)
-        def wrapper(*args, **kwargs):
-            instance = aclass(*args, **kwargs)
-            if hasattr(instance, "name"):
-                instance.name = format_name
-            return instance
+    def decorator(cls: type[Format]) -> type[Format]:
+        registry.register(name, cls, display_name, description)
+        return cls
 
-        registry[format_name] = wrapper
-        print(f"Registered format: {format_name}")
-        return wrapper
-
-    return my_decorator
+    return decorator
 
 
-class FormatFrom(ABC):
-    """Abstract base class for source format definitions.
-
-    This class can be used to define format-specific behavior
-    for source file formats in conversion operations.
-    """
-
-    pass
+# Backward compatibility aliases
+get_class = registry.get_class
+create_format = registry.create_instance
 
 
-class FormatTo(ABC):
-    """Abstract base class for target format definitions.
-
-    This class can be used to define format-specific behavior
-    for target file formats in conversion operations.
-    """
-
-    pass
-
-
-class Format(ABC):
-    """Abstract base class for format definitions and capabilities.
-
-    This class defines the interface that all format implementations
-    must follow. Format classes provide information about conversion
-    capabilities, options, and file extensions for specific formats.
-
-    Subclasses should implement all abstract methods to define:
-    - Which formats this format can be converted to
-    - Format-specific conversion options
-    - File extension information
-
-    Attributes:
-        format_name: String identifier for this format
-    """
-
-    def __init__(self, format_name):
-        """Initialize the format with its identifier.
-
-        Args:
-            format_name: String identifier for this format (e.g., 'fb2', 'mobi')
-        """
-        self.format_name = format_name
-
-    @abstractmethod
-    def allowed_formats(self) -> list:
-        """Get the list of formats this format can be converted to.
-
-        Returns:
-            List of format identifiers that this format supports as conversion targets
-        """
-        pass
-
-    @abstractmethod
-    def get_options(self):
-        """Get format-specific conversion options.
-
-        Returns:
-            Dictionary of options specific to this format's conversion process
-        """
-        pass
-
-    @abstractmethod
-    def get_extension(self):
-        """Get the file extension for this format.
-
-        Returns:
-            String file extension including the dot (e.g., '.fb2', '.mobi')
-        """
-        pass
+# Export commonly used items
+__all__ = [
+    "create_format",
+    "get_class",
+    "load_formats",
+    "register_format",
+    "registry",
+]

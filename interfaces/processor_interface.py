@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
+from config import JobConfig, Target
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -86,3 +87,6 @@ class JobProcessor(ABC):
             ProcessorError: If the job failed, is not complete, or result
                            cannot be retrieved
         """
+
+    def prepare_params(self, options):
+        return Target(**options)

@@ -10,15 +10,13 @@ import requests
 
 from dataclasses import dataclass
 
-from config import APIConfig, ConverterStatus
+from config import ConverterStatus
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
-from utils.common_utils import get_full_file_path, save_data_from_response_to_dir
 from exceptions import APIConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from pathlib import Path, PosixPath
 
 PROCESSOR_TIMEOUT = 3
 

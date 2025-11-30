@@ -4,6 +4,7 @@ import traceback
 import sys
 import os
 import io
+import json
 
 from functools import partial
 from pathlib import Path, PosixPath
@@ -12,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from config import ConverterStatus
 from config import JobConfig as Config
 
-from exceptions import ConverterError
+from exceptions import ConverterError, handle_exception_chain, create_error_context
 
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from interfaces.saver_interface import SaverProtocol
     from interfaces.ui_interface import UIProtocol
     from interfaces.worker_interface import Worker
+    from config import Target
 
 
 # TODO: implement functionality to add different converter formats
@@ -133,6 +135,9 @@ class Converter:
         print(f"----- 5:")
         self.set_status(ConverterStatus.COMPLETED)
 
+    def prepare_params(self, options) -> Target:
+        return self.processor.prepare_params(options)
+
     def validate_config(self) -> None:
         """Run different type of covert validation.
 
@@ -201,8 +206,8 @@ class Converter:
 
     def error_handler(self, error: Exception) -> None:
         """Send error from converter to user interface."""
-        if os.getenv('DEBUG') == '1':
-            error.with_traceback(sys.exc_info()[2])
+        if int(os.getenv('DEBUG')):
+            error = create_error_context(error=error)
 
         self.set_status(ConverterStatus.FAILED)
         self.interface.display_error(f"Converter got an error: {error}", ConverterStatus.FAILED)

@@ -15,6 +15,7 @@ except ImportError:
 from typing import TYPE_CHECKING
 
 from processors.local_processor import LocalProcessor
+import exceptions
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator

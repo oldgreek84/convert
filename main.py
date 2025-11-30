@@ -27,7 +27,6 @@ import logging
 import formats
 import os
 
-from config import APIConfig
 from converter import Converter
 
 from processors.local_processor import LocalProcessor
@@ -57,7 +56,7 @@ load_dotenv()
 formats.load_formats()
 
 # Access the registry
-print("Available formats:", list(formats.registry.keys()))
+print("Available formats:", [f.name for f in formats.registry.get_all()])
 
 
 def main() -> None:
@@ -100,6 +99,7 @@ def main() -> None:
 
     # Step 3: setup saver
     saver = LocalFileSaver()
+    # saver = GoogleDriveSaver()
 
     # Step 4: setup Converter with required params and non-blocking worker
     worker = ThreadWorker()

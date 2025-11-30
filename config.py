@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from exceptions import ConfigurationError
 
 if TYPE_CHECKING:
-    from formats import Format
+    from interfaces.format_instance import Format
 
 
 class ConverterStatus(StrEnum):
@@ -143,83 +143,15 @@ class SetupConfig:
         self.format_from = format_from
         self.format_to = format_to
 
-    def check_direction(self):
+    def check_direction(self) -> None:
         """Validate that the conversion direction is supported.
 
         Raises:
             ConfigurationError: If the source format is not supported for the target format.
         """
-        if self.format_from not in self.format_to.allowed_formats():
-            msg = f"Wrong direction {self.format_from.get_extension()} \
-                for direction {self.format_to.get_extension()}"
+        if self.format_from.name not in self.format_to.get_allowed_formats():
+            msg = (
+                f"Wrong direction {self.format_from.extension} "
+                f"for direction {self.format_to.extension}"
+            )
             raise ConfigurationError(msg)
-
-
-class APIConfig:
-    """Configuration management for remote API authentication and communication.
-
-    This class manages API credentials, URLs, and HTTP headers for communicating
-    with remote conversion services. It supports both direct parameter passing
-    and environment variable configuration.
-
-    The class automatically generates appropriate HTTP headers for API requests,
-    including authentication tokens and standard cache control directives.
-
-    Attributes:
-        token: API authentication token
-        url: Base URL for the remote conversion service
-        headers: Dictionary of pre-configured HTTP headers
-
-    Environment Variables:
-        API_KEY: Default API token if not provided in constructor
-        CONVERTER_URL: Default service URL if not provided in constructor
-
-    Example:
-        >>> # Using environment variables
-        >>> config = APIConfig()
-        >>>
-        >>> # Using explicit parameters
-        >>> config = APIConfig(
-        ...     token='your-api-key',
-        ...     url='https://api.converter.com'
-        ... )
-        >>> headers = config.get_header('main_header')
-    """
-
-    def __init__(self, token: str | None = None, url: str | None = None):
-        """Initialize API configuration.
-
-        Args:
-            token: API authentication token. If None, reads from API_KEY environment variable.
-            url: Base URL for the remote service. If None, reads from CONVERTER_URL environment variable.
-        """
-        self.token = token or os.environ.get("API_KEY")
-        self.url = url or os.environ.get("CONVERTER_URL")
-        self.headers = {
-            "main_header": {
-                "cache-control": "no-cache",
-                "content-type": "application/json",
-                "x-oc-api-key": self.token,
-            },
-            "cache_header": {"cache-control": "no-cache", "x-oc-api-key": self.token},
-        }
-
-    def get_header(self, header_key: str):
-        """Retrieve a specific header configuration.
-
-        Args:
-            header_key: Key identifying the header set to retrieve
-
-        Returns:
-            Dictionary containing the requested headers
-        """
-        return self.headers[header_key]
-
-    def set_header(self, key: str, data: dict):
-        """Set or update a header configuration.
-
-        Args:
-            key: Key identifying the header set to update
-            data: Dictionary containing the header configuration
-        """
-        self.headers[key] = data
