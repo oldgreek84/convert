@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import io
 from abc import ABC, abstractmethod
-from config import JobConfig, Target
+from typing import TYPE_CHECKING
+
+from src.config import Target
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from pathlib import Path, PosixPath
 
 
 class JobProcessor(ABC):
@@ -70,7 +71,7 @@ class JobProcessor(ABC):
         """
 
     @abstractmethod
-    def get_job_result(self, job_id: int) -> tuple(str, io.BytesIO):
+    def get_job_result(self, job_id: int) -> tuple[str, io.BytesIO]:
         """Retrieve the result of a completed conversion job.
 
         Returns the path or location of the converted file after successful

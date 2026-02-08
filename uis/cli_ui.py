@@ -1,68 +1,75 @@
+"""CLI View Implementation for MVP Pattern.
+
+This module provides CLIView - a passive view implementation for command-line
+interface. The view implements ViewProtocol and is responsible only for
+rendering output and capturing user input via terminal.
+
+All business logic is handled by the Application (Presenter) via callbacks.
+
+Features:
+    - Command-line argument parsing
+    - Interactive format selection prompts
+    - Confirmation before conversion
+    - Status and message display to stdout
+    - Error reporting with detailed messages
+
+Example:
+    >>> from uis.cli_ui import CLIView
+    >>> from src.application import Application
+    >>> from src.converter import Converter
+    >>>
+    >>> view = CLIView()
+    >>> converter = Converter(view, processor, saver, worker)
+    >>> app = Application(converter, view)
+    >>> app.run()
+"""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import ConverterStatus, JobConfig
-from exceptions import ParamsError
-from formats.service import format_service
-from uis import DOCSTRING, InterfaceError
+from formats.service import get_format_service
+from src.config import JobConfig
+from src.exceptions import ParamsError, UIError
+from uis import DOCSTRING
 from utils.common_utils import get_path, parse_command
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
 
-    from converter import Converter
-    from interfaces.ui_interface import Config
-
-
-def yes_no(message="Do you want to run convert[N/y]?: "):
-    """Prompt user for yes/no confirmation.
-
-    Args:
-        message: Prompt message to display to the user
-
-    Returns:
-        True if user responds with 'y' or 'yes', False otherwise
-    """
-    return input(message).lower() in {"y", "yes"}
+    from src.config import JobConfig as Config
 
 
-class ConverterInterfaceCLI:
-    """Command-line interface implementation for the e-book converter.
+class CLIView:
+    """Command-line View implementing ViewProtocol.
 
-    This class provides a text-based interface for interacting with the
-    converter through the terminal or command prompt. It handles command-line
-    argument parsing, user prompts, and text-based status display.
+    This class provides a text-based passive view for the e-book converter.
+    It handles command-line argument parsing, user prompts, and text-based
+    status display. All business logic is delegated to the Application
+    via the convert callback.
 
-    Features:
-        - Command-line argument parsing
-        - Interactive user prompts for confirmation
-        - Real-time status updates in the terminal
-        - Error message display
-        - File path validation and resolution
-        - Format and category configuration
-
-    The CLI interface supports various usage modes:
-        - Direct command-line execution with arguments
-        - Interactive mode with user prompts
-        - Status monitoring with real-time updates
-        - Error reporting with detailed messages
+    The view follows the MVP pattern:
+    - Captures user input (file path, format selection)
+    - Displays output (status, messages, errors)
+    - Triggers conversion via registered callback
 
     Attributes:
-        converter: Reference to the converter instance for operations
         docstring: Help text for command-line usage
+        config: Current JobConfig after setup
 
     Example:
-        >>> interface = ConverterInterfaceCLI()
-        >>> converter = Converter(interface, processor, saver)
-        >>> interface.run(converter)
+        >>> view = CLIView()
+        >>> view.set_on_convert(lambda: converter.convert(view.get_config()))
+        >>> view.run()
     """
 
     docstring = DOCSTRING
 
-    def __init__(self) -> None:
-        self.converter: Converter | None = None
+    def __init__(self):
+        self._on_convert = None
+        self.config = None
 
     def _print(self, msg: str) -> None:
         """Print message to stdout with proper handling.
@@ -74,42 +81,27 @@ class ConverterInterfaceCLI:
             sys.__stdout__.write(msg + "\n")
             sys.__stdout__.flush()
 
-    def convert(self, config: Config) -> None:
-        """Initiate conversion process with user feedback.
+    def set_on_convert(self, callback: Callable[[], None]) -> None:
+        self._on_convert = callback
 
-        Validates the configuration and converter state before starting
-        the conversion process. Displays appropriate error messages
-        if validation fails.
-
-        Args:
-            config: Complete job configuration for the conversion
-
-        Raises:
-            InterfaceError: If converter is not initialized or config is invalid
-        """
-        msg = ""
-        if not config:
-            msg = "There is not config of converter."
-
-        if self.converter is None:
-            msg = "Converter is not initilazed"
-
-        if msg:
-            raise InterfaceError(msg)
-
-        self.converter.convert(config)
-
-    def run(self, converter) -> None:
-        self.converter = converter
+    def run(self) -> None:
         config = self.setup()
-        if yes_no():
-            self.convert(config)
+        self.config = config
+
+        # Confirm
+        if input("Convert? [y/N]: ").lower() == "y" and self._on_convert:
+            self._on_convert()
+
+    def get_config(self):
+        if not self.config:
+            raise UIError("Config is not set up properly")
+        return self.config
 
     def setup(self) -> Config:
         try:
             args = self._get_params(sys.argv)
         except ParamsError as err:
-            self.display_common_info(self.docstring)
+            self.show_message(self.docstring)
             msg = f"There is not params to set ({err})"
             raise ParamsError(msg) from err
 
@@ -128,7 +120,8 @@ class ConverterInterfaceCLI:
         else:
             working_file_path = sys.argv[1]
 
-        format_from_name = Path(working_file_path).suffix.lstrip('.')
+        format_from_name = Path(working_file_path).suffix.lstrip(".")
+        format_service = get_format_service()
         format_from = format_service.get_source_format(format_from_name)
 
         available_targets = format_service.list_available_targets(format_from)
@@ -136,20 +129,22 @@ class ConverterInterfaceCLI:
             raise ParamsError(f"No conversion targets available for {format_from_name}")
 
         choices = {}
-        self.display_common_info("Available conversion formats:")
+        self.show_message("Available conversion formats:")
         for indx, metadata in enumerate(available_targets, start=1):
-            self.display_common_info(f"  {indx}. {metadata}")
+            self.show_message(f"  {indx}. {metadata}")
             choices[str(indx)] = metadata
 
         while True:
-            result_enter = input('Enter format number: ').strip()
+            result_enter = input("Enter format number: ").strip()
             if result_enter in choices:
                 break
 
-            self.display_common_info(f"Invalid choice '{result_enter}'. Please enter a number from 1 to {len(choices)}")
+            self.show_message(
+                f"Invalid choice '{result_enter}'. Please enter a number from 1 to {len(choices)}"
+            )
 
         chosen_metadata = choices[result_enter]
-        self.display_common_info(f"Selected: {chosen_metadata.display_name}")
+        self.show_message(f"Selected: {chosen_metadata.display_name}")
 
         format_to_name = choices[result_enter].name
         format_to = format_service.get_target_format(format_to_name, **params_data)
@@ -165,25 +160,34 @@ class ConverterInterfaceCLI:
                 \n\t{working_category = }\
                 \n\t{target_object = }\
                 \n{'=' * 80}"
-        self.display_common_info(msg)
+        self.show_message(msg)
         return target_object, working_file_path
 
-    def display_common_info(self, message: str, status: ConverterStatus | None = None) -> None:
-        msg = ">>> INTERFACE"
-        if status is not None:
-            msg += f" [STATUS: {status}] \t|"
-        msg += f" INFO: {message}"
-        self._print(msg)
+    # =========================================================================
+    # OUTPUT: Display information to user (ViewProtocol)
+    # =========================================================================
 
-    def display_job_status(self, status: ConverterStatus) -> None:
-        self._print(f">>> INTERFACE STATUS: {status}")
+    def show_status(self, status: str) -> None:
+        """Display status message."""
+        self._print(f">>> STATUS: {status}")
 
-    def display_job_result(self, result: Path | str) -> None:
-        self._print(f">>> INTERFACE RESULT: {result}")
+    def show_message(self, message: str) -> None:
+        """Display informational message."""
+        self._print(f">>> INFO: {message}")
 
-    def display_job_id(self, job_id: str) -> None:
-        self._print(f">>> INTERFACE JOB ID: {job_id}")
+    def show_error(self, error: str) -> None:
+        """Display error message."""
+        self._print(f">>> ERROR: {error}")
 
-    def display_error(self, error: str, status: ConverterStatus) -> None:
-        self.display_job_status(status)
-        self._print(f">>> INTERFACE ERROR: {error}")
+    def show_result(self, result: str | Path) -> None:
+        """Display conversion result path."""
+        self._print(f">>> RESULT: {result}")
+
+    def show_formats(self, formats: list[str]) -> None:
+        """Display available formats."""
+        self._print(">>> FORMATS:")
+        for indx, fmt in enumerate(formats, start=1):
+            self._print(f"    {indx}) {fmt}")
+
+    def show_progress(self, progress: float) -> None:
+        """Display progress (no-op for CLI)."""

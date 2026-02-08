@@ -38,7 +38,7 @@ def init_gdrive_service():
         credentials.json: OAuth2 client configuration from Google Console
         token.json: Stored user credentials (created automatically)
     """
-    current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent / '.creds'
+    current_dir = pathlib.Path(pathlib.Path(__file__).resolve()).parent / ".creds"
     token_path = current_dir / "token.json"
     credentials_path = current_dir / "credentials.json"
 
@@ -147,7 +147,7 @@ class GoogleDriveSaver(SaverProtocol):
             FileNotFoundError: If the source file doesn't exist
             HttpError: If the Google Drive API request fails
         """
-        filename = self.source_name
+        filename = self.source_name or source_name
         file_metadata = {"name": filename}
 
         media = MediaIoBaseUpload(self.source_data, resumable=True, mimetype="text/plain")

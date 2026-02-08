@@ -1,0 +1,253 @@
+@startuml E-book Converter Architecture
+
+title E-book Converter - MVP Architecture
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam packageStyle rectangle
+
+package "Interfaces (Protocols)" #LightBlue {
+    interface ViewProtocol <<Protocol>> {
+        .. Config ..
+        +get_config(): JobConfig
+        .. Output ..
+        +show_status(status: str): void
+        +show_message(message: str): void
+        +show_error(error: str): void
+        +show_result(result: Path): void
+        +show_formats(formats: list): void
+        +show_progress(progress: float): void
+        .. Events ..
+        +set_on_convert(callback: Callable): void
+        .. Lifecycle ..
+        +run(): void
+    }
+
+    interface ProgressCallback <<Protocol>> {
+        +on_status(status: str): void
+        +on_progress(percent: float): void
+        +on_message(message: str): void
+        +on_complete(result: Path): void
+        +on_error(error: str): void
+    }
+
+    interface JobProcessor <<Protocol>> {
+        +send_job(path: str, options: dict): int
+        +get_job_status(job_id: int): Generator
+        +get_job_result(job_id: int): tuple[str, BytesIO]
+        +prepare_params(options): Target
+    }
+
+    interface SaverProtocol <<Protocol>> {
+        +setup(**kwargs): void
+        +save(): Path
+    }
+
+    interface Worker <<Protocol>> {
+        +execute(func: Callable): void
+        +set_error_handler(handler: Callable): void
+    }
+}
+
+package "Application Layer" #LightGreen {
+    class Application {
+        -converter: Converter
+        -view: ViewProtocol
+        __
+        +__init__(converter, view)
+        +run(): void
+        -_handle_convert(): void
+    }
+
+    note right of Application
+        **MVP Presenter**
+        Orchestrates View and Converter.
+        Registers callback with View,
+        delegates conversion to Converter.
+    end note
+}
+
+package "Core (Model)" #LightGreen {
+    class Converter {
+        -interface: ViewProtocol
+        -processor: JobProcessor
+        -saver: SaverProtocol
+        -worker: Worker | None
+        -config: JobConfig
+        -status: ConverterStatus
+        __
+        +__init__(interface, processor, saver, worker)
+        +convert(config: JobConfig): void
+        +set_status(status: ConverterStatus): void
+        +send_job(): int
+        +get_result(job_id: int): tuple
+        +save(name: str, data: BytesIO): Path
+        +error_handler(error: Exception): void
+        -_convert(): void
+    }
+
+    class JobConfig <<dataclass>> {
+        +target: Target
+        +path_to_file: str
+        +path_to_save: str
+        +get_config(): dict
+    }
+
+    class Target <<dataclass>> {
+        +target: str
+        +category: str
+    }
+
+    enum ConverterStatus {
+        READY
+        PROCESSING
+        COMPLETED
+        FAILED
+    }
+}
+
+package "View Implementations" #LightYellow {
+    class CLIView {
+        -_on_convert: Callable
+        -config: JobConfig
+        -docstring: str
+        __
+        +run(): void
+        +setup(): Config
+        +get_config(): JobConfig
+        +set_on_convert(callback): void
+        +show_status(status): void
+        +show_message(message): void
+        +show_error(error): void
+        +show_result(result): void
+        +show_formats(formats): void
+        +show_progress(progress): void
+        -_print(msg: str): void
+        -_get_params(args: list): tuple
+    }
+
+    class TkView {
+        -root: Window
+        -_on_convert: Callable
+        -config: JobConfig
+        __
+        +run(): void
+        +get_config(): JobConfig
+        +set_on_convert(callback): void
+        +get_file_path(): str
+        +get_source_format(): str
+        +get_target_format(): str
+        +show_status(status): void
+        +show_message(message): void
+        +show_error(error): void
+        +show_result(result): void
+        +show_formats(formats): void
+        +show_progress(progress): void
+        -_create_widgets(): void
+        -_on_convert_click(): void
+        -_download_result(filename, content): void
+    }
+
+    note bottom of TkView
+        Uses @tk_thread_safe decorator
+        for thread-safe UI updates
+        from background worker.
+    end note
+}
+
+package "Processor Implementations" #LightPink {
+    class ProcessorOnDocker {
+        -text_redirector: TextRedirector
+        __
+        +send_job(path, options): int
+        +get_job_status(job_id): Generator
+        +get_job_result(job_id): tuple
+    }
+
+    class LocalProcessor {
+        +send_job(path, options): int
+        +get_job_status(job_id): Generator
+        +get_job_result(job_id): tuple
+    }
+
+    class GenericRemoteProcessor {
+        -api_service: ApiService
+        __
+        +send_job(path, options): int
+        +get_job_status(job_id): Generator
+        +get_job_result(job_id): tuple
+    }
+}
+
+package "Saver Implementations" #LightCoral {
+    class LocalFileSaver {
+        -source_name: str
+        -source_data: BytesIO
+        -destination_path: str
+        __
+        +setup(**kwargs): void
+        +save(): Path
+    }
+
+    class GoogleDriveSaver {
+        -source_name: str
+        -source_data: BytesIO
+        __
+        +setup(**kwargs): void
+        +save(): str
+    }
+}
+
+package "Worker Implementations" #LightGray {
+    class ThreadWorker {
+        -error_handler: Callable
+        __
+        +execute(func: Callable): void
+        +set_error_handler(handler: Callable): void
+    }
+}
+
+' Interface implementations
+ViewProtocol <|.. CLIView : implements
+ViewProtocol <|.. TkView : implements
+JobProcessor <|.. ProcessorOnDocker : implements
+JobProcessor <|.. LocalProcessor : implements
+JobProcessor <|.. GenericRemoteProcessor : implements
+SaverProtocol <|.. LocalFileSaver : implements
+SaverProtocol <|.. GoogleDriveSaver : implements
+Worker <|.. ThreadWorker : implements
+
+' Application relationships
+Application o--> "1" Converter : uses
+Application o--> "1" ViewProtocol : uses
+
+' Converter dependencies (Dependency Injection)
+Converter o--> "1" ViewProtocol : uses for display
+Converter o--> "1" JobProcessor : delegates conversion
+Converter o--> "1" SaverProtocol : delegates saving
+Converter o--> "0..1" Worker : optional async execution
+Converter --> JobConfig : uses
+Converter --> ConverterStatus : uses
+
+' Config relationships
+JobConfig --> Target : contains
+
+note as N1
+    **MVP Pattern**
+    
+    View (Passive): CLIView, TkView
+    - Only renders UI and captures input
+    - No business logic
+    - Notifies via callbacks
+    
+    Presenter: Application
+    - Orchestrates View and Model
+    - Handles conversion logic
+    - Registers callbacks
+    
+    Model: Converter
+    - Business logic
+    - Format conversion
+end note
+
+@enduml

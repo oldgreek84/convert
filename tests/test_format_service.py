@@ -7,14 +7,14 @@ Uses mocking to isolate service from repository.
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
-from formats.service import FormatService
-from formats.repository import FormatRepository, FormatRepositoryError
+from src import exceptions
 from formats.metadata import FormatMetadata
+from formats.repository import FormatRepository, FormatRepositoryError
+from formats.service import FormatService, create_format_service, get_format_service
 from interfaces.format_instance import Format
-import exceptions
-import config
+from src import config
 
 
 class MockFormat(Format):
@@ -228,12 +228,12 @@ class TestFormatService(unittest.TestCase):
         def get_metadata_side_effect(name):
             if name == "mobi":
                 return metadata_mobi
-            elif name == "pdf":
+            if name == "pdf":
                 return metadata_pdf
-            elif name == "txt":
+            if name == "txt":
                 return metadata_txt
-            else:
-                raise FormatRepositoryError(f"Metadata for {name} not found")
+
+            raise FormatRepositoryError(f"Metadata for {name} not found")
 
         self.mock_repository.get_metadata.side_effect = get_metadata_side_effect
 
@@ -271,10 +271,9 @@ class TestFormatService(unittest.TestCase):
         def get_metadata_side_effect(name):
             if name == "mobi":
                 return metadata_mobi
-            elif name == "pdf":
+            if name == "pdf":
                 return metadata_pdf
-            else:
-                raise FormatRepositoryError(f"Metadata for {name} not found")
+            raise FormatRepositoryError(f"Metadata for {name} not found")
 
         self.mock_repository.get_metadata.side_effect = get_metadata_side_effect
 
@@ -297,8 +296,8 @@ class TestFormatService(unittest.TestCase):
         def get_metadata_side_effect(name):
             if name == "mobi":
                 return metadata_mobi
-            else:
-                raise FormatRepositoryError(f"Metadata for {name} not found")
+
+            raise FormatRepositoryError(f"Metadata for {name} not found")
 
         self.mock_repository.get_metadata.side_effect = get_metadata_side_effect
 
@@ -383,7 +382,6 @@ class TestDependencyInjection(unittest.TestCase):
 
     def test_create_format_service_factory_with_default_repository(self):
         """Test create_format_service() uses global registry by default."""
-        from formats.service import create_format_service
 
         # Act
         service = create_format_service()
@@ -409,8 +407,6 @@ class TestDependencyInjection(unittest.TestCase):
 
     def test_get_format_service_returns_singleton(self):
         """Test get_format_service() returns the same instance."""
-        from formats.service import get_format_service
-
         # Act
         service1 = get_format_service()
         service2 = get_format_service()

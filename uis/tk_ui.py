@@ -1,25 +1,81 @@
+"""Tkinter View Implementation for MVP Pattern.
+
+This module provides TkView - a passive view implementation using Tkinter
+with ttkbootstrap for modern styling. The view implements ViewProtocol
+and is responsible only for rendering UI and capturing user input.
+
+All business logic is handled by the Application (Presenter) via callbacks.
+Thread-safe UI updates are ensured using the @tk_thread_safe decorator
+which wraps methods with tkthread.call_nosync().
+
+Features:
+    - Modern dark theme with ttkbootstrap (darkly theme)
+    - File browser integration with format filtering
+    - Format selection dropdowns with smart defaults
+    - Progress bar and status display with color coding
+    - Scrollable message area for logs
+    - Thread-safe UI updates for background worker support
+
+Example:
+    >>> from uis.tk_ui import TkView
+    >>> from src.application import Application
+    >>> from src.converter import Converter
+    >>>
+    >>> view = TkView()
+    >>> converter = Converter(view, processor, saver, worker)
+    >>> app = Application(converter, view)
+    >>> app.run()
+"""
+
 from __future__ import annotations
+
+import functools
 
 import tkthread
 
-# NOTE: allow to call methods in another tk thread
+# NOTE: Patch tkinter to allow thread-safe method calls
 tkthread.patch()
 
 import tkinter as tk
 import tkinter.filedialog as fd
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import ttkbootstrap as ttkb
 from ttkbootstrap.dialogs import Messagebox
 
-from config import ConverterStatus, Target
-from config import JobConfig as Config
+from src.config import JobConfig as Config
+from src.config import Target
 
 if TYPE_CHECKING:
-    from converter import Converter
+    from collections.abc import Callable
 
 work_dir = Path(__file__)
+
+# Type variables for generic decorator
+P = ParamSpec("P")
+T = TypeVar("T")
+
+
+def tk_thread_safe[**P, T](func: Callable[P, T]) -> Callable[P, None]:
+    """Decorator to make Tkinter methods thread-safe.
+
+    Wraps the method to execute via tkthread.call_nosync(), ensuring
+    the UI update runs on the main Tk thread even when called from
+    a background thread (e.g., ThreadWorker).
+
+    Usage:
+        @tk_thread_safe
+        def show_status(self, status: str) -> None:
+            self.status_label.config(text=status)
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> None:
+        tkthread.call_nosync(lambda: func(*args, **kwargs))
+
+    return wrapper
+
 
 CONVERTER_FORMATS_MAPPING = {
     "pdf": ["mobi"],
@@ -29,298 +85,338 @@ CONVERTER_FORMATS_MAPPING = {
 }
 
 
-class ConverterInterfaceTk:
-    """Tkinter-based graphical user interface for the e-book converter.
+class TkView:
+    """Passive View implementing ViewProtocol with ttkbootstrap styling.
 
-    This class provides a modern, user-friendly GUI for the converter using
-    the Tkinter library with ttkbootstrap for enhanced styling. It offers
-    intuitive file selection, format configuration, and real-time progress
-    monitoring through a graphical interface.
+    This view is purely passive - it only renders UI and captures user input.
+    All business logic is handled by the Presenter via callbacks.
 
     Features:
-        - Modern dark theme with ttkbootstrap
-        - File browser integration for easy file selection
-        - Dropdown menus for format selection with smart defaults
-        - Real-time progress bar and status updates
-        - Threaded execution to prevent UI freezing
-        - Error dialogs and success notifications
-        - Save-as dialog for converted files
-        - Format compatibility validation
-
-    Components:
-        - File selection area with browse button
-        - Format selection dropdowns (from/to)
-        - Convert button with progress indication
-        - Status display and message area
-        - Progress bar for conversion monitoring
-
-    The interface uses the Model-View pattern where this class acts as
-    the controller and TkView handles the actual UI rendering and events.
-
-    Attributes:
-        view: TkView instance handling the UI rendering
-        converter: Reference to the converter instance
-        config: Current job configuration
-
-    Example:
-        >>> interface = ConverterInterfaceTk()
-        >>> converter = Converter(interface, processor, saver)
-        >>> interface.run(converter)
+        - Modern dark theme with ttkbootstrap (darkly theme)
+        - File browser integration
+        - Format selection dropdowns with smart defaults
+        - Progress bar and status display
+        - Scrollable message area
+        - Thread-safe UI updates via tkthread
     """
 
     def __init__(self) -> None:
-        self.view: TkView = TkView(self)
-        self.view.create_view()
-
-    def run(self, converter: Converter) -> None:
-        self.converter = converter
-        self.view.run()
-
-    def setup(self) -> Config:
-        args = self._get_params()
-        self.config = Config(*args)
-        return self.config
-
-    def convert(self, config: Config) -> None:
-        self.converter.convert(config)
-
-    def _get_params(self) -> tuple[Target, Any]:
-        target_object = Target(self.view.get_param("target"), self.view.get_param("category"))
-        path_to_file = self.view.get_param("path_to_file")
-        return target_object, path_to_file
-
-    def get_config(self):
-        return self.config
-
-    def display_job_status(self, status: ConverterStatus) -> None:
-        self.view.set_status(status)
-
-    def display_common_info(self, message: str, status: ConverterStatus | None = None) -> None:
-        if status is not None:
-            self.display_job_status(status)
-        self.view.add_text_message(message)
-
-    def display_job_result(self, result: Path | str) -> None:
-        self.view.add_text_message(result)
-        with open(result, "rb") as file:
-            tkthread.call_nosync(self.view.processing_result, result, file.read())
-
-    def display_job_id(self, job_id: str) -> None:
-        self.view.update_text_message(job_id)
-
-    def display_error(self, error: str, status: ConverterStatus) -> None:
-        self.display_job_status(status)
-        tkthread.call_nosync(self.view.show_message, error, "show_error")
-        self.view.processing_error(error)
-
-
-class TkView:
-    """View component handling the actual Tkinter UI rendering and events.
-
-    This class is responsible for creating and managing all the visual
-    components of the Tkinter interface, handling user interactions,
-    and updating the display based on application state changes.
-
-    The view implements a modern dark-themed interface using ttkbootstrap
-    with organized sections for different functionality areas.
-
-    UI Layout:
-        - Header: Title and instructions
-        - Format Selection: From/To format dropdowns with smart defaults  
-        - File Operations: File browser, path display, convert button
-        - Status Section: Progress bar and status text field
-        - Results Area: Scrollable text area for messages and results
-
-    Features:
-        - Responsive layout with proper spacing
-        - Format compatibility checking and auto-selection
-        - Real-time progress indication
-        - Error and success message dialogs
-        - File save dialog integration
-        - Thread-safe UI updates
-
-    Attributes:
-        interface: Reference to the parent interface controller
-        root: Main window widget using ttkbootstrap theming
-        _config: Internal configuration state storage
-        Various UI components: frames, buttons, text fields, etc.
-    """
-
-    def __init__(self, interface: ConverterInterfaceTk) -> None:
-        """Initialize the view with the parent interface.
-
-        Args:
-            interface: Parent ConverterInterfaceTk instance for callbacks
-        """
-        self.interface = interface
-        self.root = ttkb.Window(title="Simple Converter", themename="darkly")
+        self.root = ttkb.Window(title="E-book Converter", themename="darkly")
         self.root.geometry("800x550")
-        self._config: dict[str, Any] = {}
+        self._on_convert: Callable[[], None] | None = None
+        self._create_widgets()
+        self.config = None
 
-    def create_view(self) -> None:
-        # get window params
-        screen_width = self.root.winfo_width()
+    def _create_widgets(self) -> None:
+        """Create all UI widgets with proper styling."""
+        # === HEADER SECTION ===
+        header_label = ttkb.Label(
+            self.root,
+            text="E-book Converter",
+            font=("Helvetica", 18, "bold"),
+            bootstyle="inverse-primary",  # type: ignore[call-arg]
+        )
+        header_label.pack(pady=(20, 5), fill=tk.X)
 
-        # add label
-        label_title = ttkb.Label(self.root, text="Please, choose file and format to convert")
-        label_title.pack(pady=10)
+        instruction_label = ttkb.Label(
+            self.root,
+            text="Select a file and target format to convert",
+            font=("Helvetica", 10),
+        )
+        instruction_label.pack(pady=(0, 15))
 
-        # SET SECTION ONE
-        # options to set converter direction
-        self.frame2 = ttkb.Frame(self.root)
-        self.frame2.pack(pady=10)
+        # === FORMAT SELECTION SECTION ===
+        format_frame = ttkb.Frame(self.root)
+        format_frame.pack(pady=10)
 
-        options = {"from": ["fb2", "txt", "epub", "pdf"], "to": ["mobi", "fb2"]}
+        # From format label and combobox
+        from_label = ttkb.Label(format_frame, text="From:", font=("Helvetica", 10))
+        from_label.grid(row=0, column=0, padx=(0, 5))
 
-        self.selection_from = ttkb.Combobox(self.frame2, bootstyle="info", values=options["from"])  # type: ignore[call-arg]
-        self.selection_from.grid(column=1, row=0, padx=10)
+        self.selection_from = ttkb.Combobox(
+            format_frame,
+            bootstyle="info",  # type: ignore[call-arg]
+            values=["fb2", "txt", "epub", "pdf", "mobi"],
+            width=12,
+        )
+        self.selection_from.grid(row=0, column=1, padx=10)
         self.selection_from.current(0)
-        self.selection_from.bind("<<ComboboxSelected>>", self.bind_convert_direction_from)
+        self.selection_from.bind("<<ComboboxSelected>>", self._on_source_format_change)
 
-        self.selection_to = ttkb.Combobox(self.frame2, bootstyle="info", values=options["to"])  # type: ignore[call-arg]
-        self.selection_to.grid(column=2, row=0, padx=10)
+        # Arrow label
+        arrow_label = ttkb.Label(format_frame, text=">>>", font=("Helvetica", 12, "bold"))
+        arrow_label.grid(row=0, column=2, padx=10)
+
+        # To format label and combobox
+        to_label = ttkb.Label(format_frame, text="To:", font=("Helvetica", 10))
+        to_label.grid(row=0, column=3, padx=(0, 5))
+
+        self.selection_to = ttkb.Combobox(
+            format_frame,
+            bootstyle="info",  # type: ignore[call-arg]
+            values=["mobi", "pdf", "epub", "fb2"],
+            width=12,
+        )
+        self.selection_to.grid(row=0, column=4, padx=10)
         self.selection_to.current(0)
-        self.selection_to.bind("<<ComboboxSelected>>", self.bind_convert_direction_to)
+        self.selection_to.bind("<<ComboboxSelected>>", self._on_target_format_change)
 
-        # SET SECTION TWO
-        # add buttons
-        self.frame1 = ttkb.Frame(self.root)
-        self.frame1.pack(pady=10)
+        # === FILE SELECTION SECTION ===
+        file_frame = ttkb.Frame(self.root)
+        file_frame.pack(pady=15, padx=20, fill=tk.X)
 
-        button_open_file = ttkb.Button(  # type: ignore[call-arg]
-                                       self.frame1, text="Open File", bootstyle="info", command=self.open_file  # type: ignore[call-arg]
-                                       )
-        button_open_file.grid(row=0, column=1, padx=10)
+        # Open file button
+        self.open_btn = ttkb.Button(
+            file_frame,
+            text="Open File",
+            bootstyle="info",  # type: ignore[call-arg]
+            command=self._open_file,
+            width=12,
+        )
+        self.open_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-        # add field to show/select file to convert
-        self.file_field = tk.Text(self.frame1, width=20, height=1)
-        self.file_field.grid(column=2, row=0, padx=10)
-        self.file_field.bind("<Button-1>", lambda event: self.open_file())
+        # File path entry
+        self.file_entry = ttkb.Entry(file_frame, font=("Helvetica", 10))
+        self.file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.file_entry.bind("<Button-1>", lambda e: self._open_file())
 
-        button_convert = ttkb.Button(  # type: ignore[call-arg]
-                                     self.frame1,
-                                     text="Convert",
-                                     bootstyle="success, outline",  # type: ignore[call-arg]
-                                     command=self.interface_convert,
-                                     )
-        button_convert.grid(row=0, column=3, padx=10)
+        # Convert button
+        self.convert_btn = ttkb.Button(
+            file_frame,
+            text="Convert",
+            bootstyle="success",  # type: ignore[call-arg]
+            command=self._on_convert_click,
+            width=12,
+        )
+        self.convert_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-        button_quit = ttkb.Button(  # type: ignore[call-arg]
-                                  self.frame1, text="Quit", bootstyle="danger", command=self.root.destroy  # type: ignore[call-arg]
-                                  )
-        button_quit.grid(row=0, column=4, padx=10)
+        # Quit button
+        self.quit_btn = ttkb.Button(
+            file_frame,
+            text="Quit",
+            bootstyle="danger-outline",  # type: ignore[call-arg]
+            command=self.root.destroy,
+            width=8,
+        )
+        self.quit_btn.pack(side=tk.LEFT)
 
-        # SET SECTION FOUR
-        # add status field
-        self.frame3 = ttkb.Frame(self.root)
-        self.frame3.pack(pady=10)
+        # === STATUS SECTION ===
+        status_frame = ttkb.Frame(self.root)
+        status_frame.pack(pady=15, padx=20, fill=tk.X)
 
-        self.status_field = ttkb.Text(self.frame3, width=20, height=1)
-        self.status_field.grid(column=2, row=0, padx=10)
+        # Progress bar
+        self.progress_bar = ttkb.Progressbar(
+            status_frame,
+            bootstyle="success-striped",  # type: ignore[call-arg]
+            length=400,
+            mode="indeterminate",
+        )
+        self.progress_bar.pack(side=tk.LEFT, padx=(0, 15))
 
-        # set progress bar
-        self.progress_bar = ttkb.Progressbar(self.frame3, length=360)
-        self.progress_bar.grid(column=1, row=0, padx=10)
+        # Status label
+        status_label_text = ttkb.Label(status_frame, text="Status:", font=("Helvetica", 10))
+        status_label_text.pack(side=tk.LEFT, padx=(0, 5))
 
-        # SET SECTION FIFE
-        # set text area
-        self.result_txt = ttkb.Text(self.root, width=screen_width, height=100)
-        self.result_txt.pack(pady=10, padx=10, fill=tk.X)
+        self.status_label = ttkb.Label(
+            status_frame,
+            text="Ready",
+            font=("Helvetica", 10, "bold"),
+            bootstyle="success",  # type: ignore[call-arg]
+            width=15,
+        )
+        self.status_label.pack(side=tk.LEFT)
 
-    def bind_convert_direction_from(self, event):
-        current_val = self.selection_from.get()
-        default = "mobi"
-        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
-        self.selection_to.set(list_of_possible[0])
+        # === MESSAGE AREA SECTION ===
+        message_frame = ttkb.LabelFrame(self.root, text="Messages", bootstyle="info")  # type: ignore[call-arg]
+        message_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
 
-    def bind_convert_direction_to(self, event):
-        current_val = self.selection_to.get()
-        default = "fb2"
-        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [default])
-        self.selection_from.set(list_of_possible[0])
+        # Scrollbar
+        scrollbar = ttkb.Scrollbar(message_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    def bind_convert_direction(self, event, direction="mobi"):
-        current_val = self.selection_to.get()
-        list_of_possible = CONVERTER_FORMATS_MAPPING.get(current_val, [direction])
-        self.selection_from.set(list_of_possible[0])
+        # Text area for messages
+        self.message_text = tk.Text(
+            message_frame,
+            height=12,
+            font=("Consolas", 9),
+            bg="#2b2b2b",
+            fg="#ffffff",
+            insertbackground="#ffffff",
+            yscrollcommand=scrollbar.set,
+        )
+        self.message_text.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.message_text.yview)
 
-    def bind_open_file_tap(self, event):
-        self.open_file()
+        # === FOOTER ===
+        footer_label = ttkb.Label(
+            self.root,
+            text="E-book Converter v1.0",
+            font=("Helvetica", 8),
+            bootstyle="secondary",  # type: ignore[call-arg]
+        )
+        footer_label.pack(pady=(5, 10))
 
-    def set_config(self):
-        self.set_data("path_to_file", self.file_field.get("0.0", "end").strip("\n"))
-        self.set_data("category", "ebook")
-        self.set_data("target", self.selection_to.get())
+    def _on_source_format_change(self, event) -> None:
+        """Update target format options when source format changes."""
+        current = self.selection_from.get()
+        targets = CONVERTER_FORMATS_MAPPING.get(current, ["mobi"])
+        self.selection_to.config(values=targets)
+        if targets:
+            self.selection_to.set(targets[0])
 
-    def set_data(self, key: Any, value: Any) -> None:
-        self._config[key] = value
+    def _on_target_format_change(self, event) -> None:
+        """Update source format when target changes (optional auto-select)."""
 
-    def interface_convert(self) -> bool:
-        """Run convert processing in UI"""
-        self.update_text_message("")
-        self.set_config()
-        config = self.interface.setup()
-        self.progress_bar.start()
-        self.interface.convert(config)
-        return True
+    def _open_file(self) -> None:
+        """Open file dialog and set file path."""
+        filetypes = (
+            ("E-book files", f"*.{self.selection_from.get()}"),
+            ("All e-books", "*.fb2 *.epub *.mobi *.pdf *.txt"),
+            ("All files", "*.*"),
+        )
+        filename = fd.askopenfilename(
+            title="Select an e-book file",
+            initialdir=Path.home(),
+            filetypes=filetypes,
+        )
+        if filename:
+            self.file_entry.delete(0, tk.END)
+            self.file_entry.insert(0, filename)
+            # Auto-detect source format from file
+            ext = Path(filename).suffix.lstrip(".")
+            if ext in ["fb2", "txt", "epub", "pdf", "mobi"]:
+                self.selection_from.set(ext)
+                self._on_source_format_change(None)
 
-    def processing_error(self, error: str) -> None:
-        self.add_text_message(error)
+    def _on_convert_click(self) -> None:
+        """Handle convert button click - delegates to presenter callback."""
+        if self._on_convert:
+            self._on_convert()
+
+    def _get_file_path(self) -> str:
+        """Get the selected file path from entry widget."""
+        return self.file_entry.get().strip()
+
+    def _get_target_format(self) -> str:
+        """Get the target format from combobox."""
+        return self.selection_to.get()
+
+    # =========================================================================
+    # OUTPUT: Display information to user (ViewProtocol)
+    # All methods decorated with @tk_thread_safe for thread-safe UI updates
+    # =========================================================================
+
+    @tk_thread_safe
+    def show_status(self, status: str) -> None:
+        """Update status label with appropriate styling (thread-safe)."""
+        self.status_label.config(text=status)
+        # Update style based on status
+        style_map = {
+            "ready": "success",
+            "processing": "warning",
+            "completed": "success",
+            "failed": "danger",
+        }
+        style = style_map.get(status.lower(), "info")
+        self.status_label.config(bootstyle=style)  # type: ignore[call-arg]
+
+    @tk_thread_safe
+    def show_message(self, message: str) -> None:
+        """Add a message to the message area (thread-safe)."""
+        self.message_text.insert(tk.END, message.strip() + "\n")
+        self.message_text.see(tk.END)
+
+    @tk_thread_safe
+    def show_error(self, error: str) -> None:
+        """Show error in popup dialog (thread-safe)."""
         self.progress_bar.stop()
+        Messagebox.show_error(title="Conversion Error", message=error)
 
-    def processing_result(self, result: Path, content: bytes):
+    @tk_thread_safe
+    def show_result(self, result: str | Path) -> None:
+        """Show success result and offer to save file (thread-safe)."""
         self.progress_bar.stop()
-        self.download_result(result.name, content)
+        self._show_message_sync(f"Conversion complete: {result}")
 
-    def open_file(self) -> None:
-        self.file_field.delete(0.0, "end")
-        filetypes = (("Ebook files", f"*.{self.selection_from.get()}"), ("All files", "*.*"))
-        filename = fd.askopenfilename(title="Open a file", initialdir=work_dir, filetypes=filetypes)
-        self.file_field.insert(0.0, filename)
+        # Read the converted file and offer save dialog
+        try:
+            with open(result, "rb") as f:
+                content = f.read()
+            self._download_result(Path(result).name, content)
+        except Exception as e:
+            Messagebox.show_error(title="Error", message=f"Failed to read result: {e}")
 
-    def download_result(self, filename: str, converted_file_content: bytes) -> None:
+    def _show_message_sync(self, message: str) -> None:
+        """Add message without thread wrapper (for internal use from main thread)."""
+        self.message_text.insert(tk.END, message.strip() + "\n")
+        self.message_text.see(tk.END)
+
+    @tk_thread_safe
+    def show_formats(self, formats: list[str]) -> None:
+        """Update available target formats (thread-safe)."""
+        self.selection_to.config(values=formats)
+        if formats:
+            self.selection_to.set(formats[0])
+
+    @tk_thread_safe
+    def show_progress(self, progress: float) -> None:
+        """Update progress bar (thread-safe)."""
+        if progress < 0:
+            # Indeterminate mode
+            self.progress_bar.config(mode="indeterminate")
+            self.progress_bar.start()
+        elif progress >= 1.0:
+            self.progress_bar.stop()
+            self.progress_bar.config(mode="determinate", value=100)
+        else:
+            self.progress_bar.stop()
+            self.progress_bar.config(mode="determinate", value=int(progress * 100))
+
+    def _download_result(self, filename: str, content: bytes) -> None:
+        """Show save dialog for converted file (called from main thread via @tk_thread_safe)."""
         file_path = fd.asksaveasfilename(
             initialfile=filename,
-            initialdir=".",
+            initialdir=Path.home(),
             defaultextension=f".{self.selection_to.get()}",
-            filetypes=[("Ebook files", f"*.{self.selection_to.get()}"), ("All Files", "*.*")],
-            title="Save Converted eBook",
+            filetypes=[
+                ("E-book files", f"*.{self.selection_to.get()}"),
+                ("All Files", "*.*"),
+            ],
+            title="Save Converted E-book",
         )
 
         if not file_path:
             return
 
         try:
-            with open(file_path, "wb") as file:
-                file.write(converted_file_content)
-            self.show_message(f"File saved: {file_path}")
-        except Exception as exc:
-            self.show_message(f"Failed to save file: {exc}", "show_error")
+            with open(file_path, "wb") as f:
+                f.write(content)
+            Messagebox.show_info(title="Success", message=f"File saved: {file_path}")
+        except Exception as e:
+            Messagebox.show_error(title="Error", message=f"Failed to save: {e}")
 
-    def add_text_message(self, message: str | Path) -> None:
-        if not isinstance(message, str):
-            return
+    # =========================================================================
+    # EVENTS: Callbacks for user actions (ViewProtocol)
+    # =========================================================================
 
-        self.result_txt.insert(tk.END, message.strip() + "\n")
-        self.result_txt.see(tk.END)
+    def get_config(self) -> Config:
+        args = self._get_params()
+        self.config = Config(*args)
+        return self.config
 
-    def update_text_message(self, message: str) -> None:
-        """Clear old message from text area and write new one"""
-        self.result_txt.delete(0.0, tk.END)
-        self.result_txt.insert(0.0, message)
+    def _get_params(self) -> tuple[Target, Any]:
+        target_object = Target(self._get_target_format(), "ebook")
+        path_to_file = self._get_file_path()
+        return target_object, path_to_file
 
-    def set_status(self, msg: str) -> None:
-        """Show new status in status field"""
-        self.status_field.delete(0.0, tk.END)
-        self.status_field.insert(0.0, msg)
+    def set_on_convert(self, callback: Callable[[], None]) -> None:
+        """Register callback for convert button."""
+        self._on_convert = callback
 
-    def get_param(self, key: str) -> Any:
-        return self._config.get(key)
-
-    def show_message(self, message: str, message_type="show_info") -> None:
-        """Show message in popup window"""
-        dialog_window = getattr(Messagebox, message_type)
-        dialog_window(title="Converter Info", message=message)
+    # =========================================================================
+    # LIFECYCLE (ViewProtocol)
+    # =========================================================================
 
     def run(self) -> None:
+        """Start the Tkinter main loop."""
         self.root.mainloop()

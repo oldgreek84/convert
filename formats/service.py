@@ -9,14 +9,14 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import config
-import exceptions
-from formats.metadata import FormatMetadata
+from formats import registry
 from formats.repository import FormatRepositoryError
-from interfaces.repository_protocol import FormatRepositoryProtocol
+from src import config, exceptions
 
 if TYPE_CHECKING:
+    from formats.metadata import FormatMetadata
     from interfaces.format_instance import Format
+    from interfaces.repository_protocol import FormatRepositoryProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -217,8 +217,6 @@ def create_format_service(
         >>> test_service = create_format_service(mock_repo)
     """
     if repository is None:
-        from formats import registry
-
         repository = registry
     return FormatService(repository)
 
@@ -244,13 +242,22 @@ def get_format_service() -> FormatService:
     return _format_service
 
 
-# Backward compatibility - direct instance access
-# Note: Prefer using get_format_service() or create_format_service()
+# WARNING: Module-level __getattr__ does NOT work with direct imports!
+# `from formats.service import format_service` imports None directly.
+# Use `get_format_service()` instead for proper lazy initialization.
+#
+# The __getattr__ below only works with attribute access:
+#   import formats.service; formats.service.format_service  # Works
+#   from formats.service import format_service              # Returns None!
 format_service: FormatService = None  # type: ignore[assignment]
 
 
 def __getattr__(name: str) -> Any:
-    """Module-level getattr for lazy initialization of format_service."""
+    """Module-level getattr for lazy initialization of format_service.
+
+    NOTE: This only works with attribute access (formats.service.format_service),
+    NOT with direct imports (from formats.service import format_service).
+    """
     if name == "format_service":
         return get_format_service()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -81,6 +82,40 @@ class LocalFileSaver(SaverProtocol):
 
         self.source_data = source_data
 
+    @staticmethod
+    def _get_unique_filepath(filepath: Path) -> Path:
+        """Generate a unique filepath if the original is not writable.
+
+        If the file exists and cannot be overwritten (permission error),
+        adds a numeric suffix to create a unique filename.
+
+        Args:
+            filepath: The original target file path
+
+        Returns:
+            A writable file path (original or with numeric suffix)
+        """
+        if not filepath.exists():
+            return filepath
+
+        # Check if we can write to existing file
+        if os.access(filepath, os.W_OK):
+            return filepath
+
+        # Generate unique filename with suffix
+        stem = filepath.stem
+        suffix = filepath.suffix
+        parent = filepath.parent
+
+        counter = 1
+        while True:
+            new_filepath = parent / f"{stem}_{counter}{suffix}"
+            if not new_filepath.exists():
+                return new_filepath
+            if os.access(new_filepath, os.W_OK):
+                return new_filepath
+            counter += 1
+
     def save(self) -> str | Path | PosixPath:
         """Save the file to the configured destination."""
         if not self.destination_path:
@@ -88,6 +123,7 @@ class LocalFileSaver(SaverProtocol):
             raise RuntimeError(msg)
 
         filepath = self.destination_path / Path(self.source_name).name
+        filepath = self._get_unique_filepath(filepath)
         stream = self.source_data
         stream.seek(0)
         with open(filepath, "wb") as f:

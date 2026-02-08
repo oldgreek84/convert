@@ -15,7 +15,6 @@ except ImportError:
 from typing import TYPE_CHECKING
 
 from processors.local_processor import LocalProcessor
-import exceptions
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -143,7 +142,7 @@ class TextRedirector:
         Args:
             message: Text message to display in the UI
         """
-        self.widget.display_common_info(message)
+        self.widget.show_message(message)
 
     # NOTE: Required for sys.stdout compatibility
     def flush(self):
@@ -223,7 +222,7 @@ class ProcessorOnDocker(LocalProcessor):
             detach=True,
         )
         container_id = hash(container.id or str(container))
-        self.containers[container_id] = (container, file_to_save)  # type: ignore
+        self.containers[container_id] = (container, file_to_save)
         return container_id
 
     def _prepare_command(self, filename: str, options: dict) -> dict:
@@ -238,13 +237,13 @@ class ProcessorOnDocker(LocalProcessor):
         res["command"] = [main_command, path_to_file, path_to_save, *other]
         return res
 
-    def _get_container(self, job_id: int):  # type: ignore
+    def _get_container(self, job_id: int):
         return self.containers[job_id][0]
 
     def get_job_status(self, job_id: int) -> Generator:
         container = self._get_container(job_id)
         if self.client:
-            logs_stream = self.client.containers.get(container.id).logs(stream=True)  # type: ignore
+            logs_stream = self.client.containers.get(container.id).logs(stream=True)
             for line in logs_stream:
                 yield line.decode("utf-8").strip()
 

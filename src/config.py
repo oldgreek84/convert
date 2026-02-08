@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from exceptions import ConfigurationError
+from src.exceptions import ConfigurationError
 
 if TYPE_CHECKING:
     from interfaces.format_instance import Format

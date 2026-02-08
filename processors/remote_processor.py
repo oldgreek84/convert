@@ -1,24 +1,24 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import time
-import io
-from typing import TYPE_CHECKING, TextIO, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TextIO
 
 import requests
 
-from dataclasses import dataclass
-
-from config import ConverterStatus
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
-from exceptions import APIConfigError
+from src.config import ConverterStatus
+from src.exceptions import APIConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 PROCESSOR_TIMEOUT = 3
+SUCCESS_CODE = 200
 
 
 @dataclass
@@ -49,9 +49,7 @@ class GenericAPIServiceInterface:
 # TODO: add api registry
 class ApiServiceCur(GenericAPIServiceInterface):
     def __init__(self, token=None, url=None):
-        self.status_options = {
-            'timeout': PROCESSOR_TIMEOUT
-        }
+        self.status_options = {"timeout": PROCESSOR_TIMEOUT}
         self.token = token or os.environ.get("API_KEY")
         self.url = url or os.environ.get("CONVERTER_URL")
         self.headers = {
@@ -65,7 +63,7 @@ class ApiServiceCur(GenericAPIServiceInterface):
 
     @property
     def timeout(self):
-        return self.get_options('timeout')
+        return self.get_options("timeout")
 
     def get_options(self, key):
         if self.status_options.get(key):
@@ -127,9 +125,9 @@ class ApiServiceCur(GenericAPIServiceInterface):
             "processing": ConverterStatus.PROCESSING,
             "error": ConverterStatus.FAILED,
         }
-        con_status = codes_map.get(data['status']['code'], ConverterStatus.FAILED)
+        con_status = codes_map.get(data["status"]["code"], ConverterStatus.FAILED)
         self._status = con_status
-        return ApiStatus(response.status_code, data['status']['info'], job_id, con_status)
+        return ApiStatus(response.status_code, data["status"]["info"], job_id, con_status)
 
     def get_job_result(self, job_id):
         response = requests.get(
@@ -144,7 +142,7 @@ class ApiServiceCur(GenericAPIServiceInterface):
             msg = f"ERROR: {self._get_error_info(data)}"
             raise ProcessorError(msg)
 
-        return data['output'][0]['uri']
+        return data["output"][0]["uri"]
 
     def prepare_result(self, result):
         url = result
@@ -178,61 +176,12 @@ class ApiAdapter:
         except KeyError:
             return default
 
-    def get_status(self, job_id: int|str) -> ApiStatus:
+    def get_status(self, job_id: int | str) -> ApiStatus:
         return self._service.get_job_status(job_id)
 
-    def get_job_result(self, job_id: int| str) -> tuple(str, io.BytesIO):
+    def get_job_result(self, job_id: int | str) -> tuple(str, io.BytesIO):
         result = self._service.get_job_result(job_id)
         return self._service.prepare_result(result)
-
-    # def prepare_params(self, params):
-    #     return self._service._prepare_send_params(params)
-    #
-    # def check_errors(self, data: dict) -> None:
-    #     self._service.check_errors(data)
-    #
-    # def send_request(self, request_type, **params):
-    #     return self
-    #
-    # def post_process_response(self, response):
-    #     return self._service.process(response)
-    # def _get(self, **params):
-    #     params = {
-    #         'url': self._service.main_api_url,
-    #         **params,
-    #     }
-    #     return requests.get(
-    #         params['url'],
-    #         timeout=params['timeout'],
-    #     )
-    #
-    # def _post(self, **params):
-    #     params = {
-    #         'url': self._service.main_api_url,
-    #         **params,
-    #         **self._service.prepare_params(),
-    #     }
-    #     try:
-    #         res = requests.post(
-    #             params['url'],
-    #             headers=self._service.get_header(),
-    #             # data=params['data'],
-    #             timeout=params['timeout'],
-    #             **params,
-    #         )
-    #         if res.status_code not in ('200', '201'):
-    #             return []
-    #         return res.json()
-    #
-    #     except requests.exceptions.ConnectTimeout:
-    #         while self.max_retrises > 0:
-    #             time.sleep(3)
-    #             self.max_retrises -= 1
-    #             self._post(**params)
-    #
-    #     except Exception as err:
-    #         print(f"Error: {err}")
-    #         return []
 
 
 # TODO: make options maybe as dataclass or separated class of format
@@ -247,7 +196,7 @@ class GenericRemoteProcessor(JobProcessor):
 
     def setup(self):
         if not self.api_adapter:
-            msg = 'API service is not setup.'
+            msg = "API service is not setup."
             raise APIConfigError(msg)
 
         self.api_adapter.setup()
@@ -264,7 +213,7 @@ class GenericRemoteProcessor(JobProcessor):
     def get_job_status(self, job_id: int) -> Generator:
         result = None
         while not self.is_completed(result):
-            time.sleep(self.api_adapter.get_options('timeout'))
+            time.sleep(self.api_adapter.get_options("timeout"))
             result: ApiStatus = self.api_adapter.get_status(job_id)
             self.set_status(result.status)
             yield result.info
@@ -280,4 +229,4 @@ class GenericRemoteProcessor(JobProcessor):
             return False
 
         requests_result = api_result.status_code
-        return api_result.status == ConverterStatus.COMPLETED and requests_result == 200
+        return api_result.status == ConverterStatus.COMPLETED and requests_result == SUCCESS_CODE

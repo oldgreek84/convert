@@ -1,33 +1,25 @@
 from __future__ import annotations
 
-import traceback
-import sys
-import os
 import io
-import json
-
+import os
 from functools import partial
 from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING, Any
 
-from config import ConverterStatus
-from config import JobConfig as Config
-
-from exceptions import ConverterError, handle_exception_chain, create_error_context
-
+from src.config import ConverterStatus
+from src.config import JobConfig as Config
+from src.exceptions import ConverterError, create_error_context
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from interfaces.processor_interface import JobProcessor
     from interfaces.saver_interface import SaverProtocol
-    from interfaces.ui_interface import UIProtocol
+    from interfaces.view_interface import ViewProtocol
     from interfaces.worker_interface import Worker
-    from config import Target
+    from src.config import Target
 
 
-# TODO: implement functionality to add different converter formats
-# TODO: implement saver class to replace logic of saving results with different sources
 # TODO: maybe make save the result private and return as result the bytes instead of link to file
 # because each processor can have different type of result link. Example:
 # /home/doc/projects/convert/Mystetstvo_liubovi.fb2.mobi
@@ -74,7 +66,7 @@ class Converter:
 
     def __init__(
         self,
-        interface: UIProtocol,
+        interface: ViewProtocol,
         processor: JobProcessor,
         saver: SaverProtocol,
         worker: Worker | None = None,
@@ -92,7 +84,7 @@ class Converter:
 
     def set_status(self, status: ConverterStatus) -> None:
         self.status = status
-        self.interface.display_job_status(self.status)
+        self.interface.show_status(self.status)
 
     def convert(self, config: Config) -> None:
         """Run processing the data to needed format."""
@@ -116,23 +108,18 @@ class Converter:
 
     def _convert(self) -> None:
         # validate config
-        print(f"----- 1:")
         self.validate_config()
 
-        print(f"----- 2:")
         # send file to processor
         job_id = self.send_job()
-        print(f"----- 3: {job_id}")
 
         # check processing result and get it path
         result_file_name, source_data = self.get_result(job_id)
-        print(f"----- 4: {result_file_name} {source_data}")
 
         # save result file
         if result_file_name:
             self.save(result_file_name, source_data)
 
-        print(f"----- 5:")
         self.set_status(ConverterStatus.COMPLETED)
 
     def prepare_params(self, options) -> Target:
@@ -178,7 +165,6 @@ class Converter:
         """Send job data to processor. Return job ID"""
         # setup converter options
         path_to_file = self.get_file_path()
-        print(f"----- send_job: {path_to_file=}")
         self.validate_path(path_to_file)
         options = self.get_job_options()
 
@@ -186,18 +172,19 @@ class Converter:
         job_id = self.processor.send_job(path_to_file, options)
 
         # show job ID on interface
-        self.interface.display_common_info(f"Job ID: {job_id}")
+        self.interface.show_message(f"Job ID: {job_id}")
 
         return job_id
 
-    def get_result(self, job_id: int) -> tuple(str, io.BytesIO):
+    def get_result(self, job_id: int) -> tuple[str, io.BytesIO]:
         """Get job result from processor. Return path to converted file
-        and bytes data in stream"""
+        and bytes data in stream
+        """
         # check processing results as status to show info in user interface
         # NOTE: need to implement processing as generator to stream processor status
         processor_info = self.processor.get_job_status(job_id)
         for message in processor_info:
-            self.interface.display_common_info(message, status=ConverterStatus.PROCESSING)
+            self.interface.show_message(message + ConverterStatus.PROCESSING)
 
         # after end of processing data return the result as bytes data or Path to save file
         # NOTE: need to check different types of results
@@ -206,11 +193,13 @@ class Converter:
 
     def error_handler(self, error: Exception) -> None:
         """Send error from converter to user interface."""
-        if int(os.getenv('DEBUG')):
-            error = create_error_context(error=error)
+        error_message = str(error)
+        if os.getenv("DEBUG", "0") == "1":
+            context = create_error_context(error=error)
+            error_message = f"{error} | Context: {context}"
 
         self.set_status(ConverterStatus.FAILED)
-        self.interface.display_error(f"Converter got an error: {error}", ConverterStatus.FAILED)
+        self.interface.show_error(f"Converter got an error: {error_message}")
 
     def save(self, source_name: str, source_data: io.BytesIO) -> str | Path | PosixPath:
         """Save result of processing.
@@ -227,5 +216,5 @@ class Converter:
             destination_path=self.config.path_to_save,
         )
         result = self.saver.save()
-        self.interface.display_job_result(result)
+        self.interface.show_result(result)
         return result

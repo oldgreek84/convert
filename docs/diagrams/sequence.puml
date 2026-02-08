@@ -1,0 +1,164 @@
+@startuml Conversion Flow Sequence
+
+title E-book Converter - MVP Sequence Diagram
+
+actor User
+participant "main.py" as Main
+participant "Application\n(Presenter)" as App
+participant "CLIView/TkView\n(View)" as View
+participant "Converter\n(Model)" as Conv
+participant "JobProcessor" as Proc
+participant "SaverProtocol" as Saver
+participant "Worker" as Worker
+
+== Initialization ==
+
+Main -> View: create()
+Main -> Proc: create()
+Main -> Saver: create()
+Main -> Worker: create() [optional]
+Main -> Conv: create(interface=view, processor, saver, worker)
+note right of Conv
+    Dependency Injection:
+    All components injected
+    via constructor
+end note
+
+Main -> App: create(converter, view)
+Main -> App: run()
+activate App
+
+== MVP Pattern Setup ==
+
+App -> View: set_on_convert(callback)
+note right of App
+    **MVP Pattern**
+    Presenter registers callback
+    so View can trigger conversion
+end note
+
+App -> View: run()
+activate View
+
+== Configuration Phase (CLI) ==
+
+View -> View: setup()
+activate View #LightBlue
+View --> User: Display available formats
+User --> View: Select file path
+User --> View: Select target format
+View -> View: Create JobConfig internally
+deactivate View
+
+View --> User: "Convert? [y/N]"
+User --> View: "y" (confirm)
+
+== Conversion Trigger ==
+
+note over View
+    View is passive - calls registered
+    callback instead of Converter directly
+end note
+
+View -> App: callback() [_handle_convert]
+activate App #LightGreen
+
+App -> View: get_config()
+View --> App: JobConfig
+
+App -> Conv: convert(config)
+activate Conv
+
+== Processing Phase ==
+
+Conv -> Conv: set_status(PROCESSING)
+Conv -> View: show_status(PROCESSING)
+
+Conv -> Conv: setup_converter_executor()
+note right of Conv
+    If Worker exists: wrap _convert
+    in worker.execute() for async
+    Otherwise: run synchronously
+end note
+
+alt With Worker (Async)
+    Conv -> Worker: execute(_convert)
+    activate Worker
+    Worker -> Conv: _convert()
+else Without Worker (Sync)
+    Conv -> Conv: _convert()
+end
+
+activate Conv #LightGreen
+
+Conv -> Conv: validate_config()
+
+== Send Job to Processor ==
+
+Conv -> Proc: send_job(path_to_file, options)
+activate Proc
+Proc -> Proc: Execute conversion
+Proc --> Conv: job_id
+deactivate Proc
+
+Conv -> View: show_message("Job ID: {job_id}")
+
+== Monitor Processing Status ==
+
+Conv -> Proc: get_job_status(job_id)
+activate Proc
+
+loop for each status message from generator
+    Proc --> Conv: status_message
+    Conv -> View: show_message(message)
+end
+
+deactivate Proc
+
+== Get Result ==
+
+Conv -> Proc: get_job_result(job_id)
+activate Proc
+Proc --> Conv: (result_file_name, source_data: BytesIO)
+deactivate Proc
+
+== Save Result ==
+
+Conv -> Saver: setup(source_name, source_data, destination_path)
+Conv -> Saver: save()
+activate Saver
+Saver -> Saver: Write file to disk
+Saver --> Conv: result_path
+deactivate Saver
+
+Conv -> View: show_result(result_path)
+
+== Completion ==
+
+Conv -> Conv: set_status(COMPLETED)
+Conv -> View: show_status(COMPLETED)
+
+deactivate Conv
+
+alt With Worker
+    deactivate Worker
+end
+
+deactivate Conv
+deactivate App
+deactivate View
+deactivate App
+
+User --> User: Conversion complete!
+
+== Error Handling ==
+
+note over Conv, View
+    If error occurs during conversion:
+    1. Worker catches exception
+    2. Calls converter.error_handler()
+    3. error_handler() sets status to FAILED
+    4. View shows error message
+end note
+
+@enduml

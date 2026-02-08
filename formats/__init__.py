@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from formats.repository import FormatRepository
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from interfaces.format_instance import Format
 
 # Global registry instance

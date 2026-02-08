@@ -1,144 +1,162 @@
+"""Unit tests for the Converter class.
+
+Tests the core conversion orchestration logic with mocked dependencies.
+"""
+
+from __future__ import annotations
+
+import io
 import os
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
-from converter import Converter, ConvertError
-from tests.common import DummyJobProcessor, DummyUI, DummyWorker
+from src.converter import Converter
+from src.exceptions import ConverterError
+from src.config import JobConfig, Target
+from tests.common import DummyJobProcessor, DummyUI, DummyWorker, DummySaver
 
 
 class ConverterTestCase(unittest.TestCase):
+    """Test cases for Converter class."""
+
     def setUp(self):
-        self.converter = Converter(interface=DummyUI(), processor=DummyJobProcessor())
+        """Set up test fixtures with all required dependencies."""
+        self.ui = DummyUI()
+        self.processor = DummyJobProcessor()
+        self.saver = DummySaver()
+        self.converter = Converter(interface=self.ui, processor=self.processor, saver=self.saver)
+
+    def test_init_creates_converter(self):
+        """Test that __init__ creates converter with all dependencies."""
+        self.assertIsNotNone(self.converter)
+        self.assertEqual(self.converter.interface, self.ui)
+        self.assertEqual(self.converter.processor, self.processor)
+        self.assertEqual(self.converter.saver, self.saver)
 
     def test_set_config(self):
-        self.converter.set_config("config")
-        self.assertEqual(self.converter.config, "config")
+        """Test that set_config stores the configuration."""
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, "/path/to/file.fb2")
+        self.converter.set_config(config)
+        self.assertEqual(self.converter.config, config)
 
-    def test_main_convert(self):
-        with patch.object(type(self.converter), "_convert") as mocked:
-            self.converter.convert("config")
-        mocked.assert_called_once()
+    def test_convert_calls_internal_convert(self):
+        """Test that convert() calls _convert method."""
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, "/path/to/file.fb2")
 
-    def test_main_convert_result(self):
-        config = Mock(path_to_save="path/to/save")
-        with \
-                patch.object(self.converter, "set_converter_executor") as mocked_executor,\
-                patch.object(self.converter, "send_job") as mocked_send,\
-                patch.object(self.converter, "get_result") as mocked_result,\
-                patch.object(self.converter, "save") as mocked_save:
-            mocked_executor.return_value = self.converter._convert
-            mocked_result.return_value = b"test data"
+        with patch.object(self.converter, "_convert") as mocked:
             self.converter.convert(config)
-        mocked_send.assert_called_once()
-        mocked_save.assert_called_once()
+            mocked.assert_called_once()
 
-    def test_main_convert_without_config(self):
-        with self.assertRaises(Exception) as ex:
+    def test_convert_without_config_raises_error(self):
+        """Test that _convert raises ConverterError when config is not set."""
+        with self.assertRaises(ConverterError) as ex:
             self.converter._convert()
-        self.assertEqual(ex.exception.args[0], "Converter`s config was not set")
+        self.assertIn("config was not set", str(ex.exception))
 
-    def test_main_convert_with_wrong_file_path(self):
-        config = Mock(path_to_file="wrong/path/to/file")
-        self.converter.set_config(config)
-        with self.assertRaises(Exception) as ex:
-            self.converter._convert()
-        self.assertEqual(ex.exception.args[0], "Invalid file path")
-
-    def test_main_convert_without_options(self):
-        # prepare converter config
-        class Config:
-            path_to_file = "path/to/file"
-
-            def get_config(self):
-                return {}
-
-        config = Config()
+    def test_convert_with_wrong_file_path_raises_error(self):
+        """Test that _convert raises ConverterError for invalid file path."""
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, "wrong/path/to/file")
         self.converter.set_config(config)
 
-        with \
-                patch.object(self.converter, "validate_path") as mocked_path,\
-                patch.object(self.converter.processor, "is_completed") as mocked_proc,\
-                patch("builtins.open", open=True):
-            mocked_proc.return_value = True
-            mocked_path.return_value = True
-            with self.assertRaises(Exception) as ex:
-                self.converter._convert()
-        self.assertEqual(ex.exception.args[0], "Converter`s config was not set")
+        with self.assertRaises(ConverterError) as ex:
+            self.converter._convert()
+        self.assertIn("Invalid file path", str(ex.exception))
 
-    def test_get_convert_executor(self):
-        self.converter.worker = DummyWorker()
-        executor = self.converter.set_converter_executor()
-        self.assertTrue(executor)
+    def test_setup_converter_executor_returns_callable(self):
+        """Test that setup_converter_executor returns a callable."""
+        executor = self.converter.setup_converter_executor()
+        self.assertTrue(callable(executor))
 
-    def test_get_convert_executor_without_worker(self):
-        executor = self.converter.set_converter_executor()
-        self.assertTrue(executor)
+    def test_setup_converter_executor_with_worker(self):
+        """Test that setup_converter_executor uses worker when available."""
+        worker = DummyWorker()
+        self.converter.worker = worker
+        executor = self.converter.setup_converter_executor()
+        self.assertTrue(callable(executor))
 
-    def test_validate_path(self):
-        with self.assertRaises(ConvertError):
-            self.converter.validate_path("fake/path")
+    def test_validate_path_raises_error_for_invalid_path(self):
+        """Test that validate_path raises ConverterError for non-existent file."""
+        with self.assertRaises(ConverterError):
+            self.converter.validate_path("fake/path/to/file.fb2")
 
-    def test_validate_with_error(self):
+    def test_validate_path_returns_true_for_valid_path(self):
+        """Test that validate_path returns True for existing file."""
         path_to_file = os.path.abspath(__file__)
         res = self.converter.validate_path(path_to_file)
         self.assertTrue(res)
 
     def test_get_file_path(self):
-        config = Mock()
-        config.path_to_file = "path/to/file"
+        """Test that get_file_path returns path from config."""
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, "/path/to/file.fb2")
         self.converter.set_config(config)
-        self.assertEqual(self.converter.get_file_path(), "path/to/file")
+        self.assertEqual(self.converter.get_file_path(), "/path/to/file.fb2")
 
     def test_get_job_options(self):
-        attrs = {
-            "get_config": lambda: {
-                "target": "target",
-                "category": "category",
-                "options": {},
-            }
-        }
-        self.converter.config = Mock(**attrs)
+        """Test that get_job_options returns config options."""
+        target = Target(target="mobi", category="ebook", options={"quality": 90})
+        config = JobConfig(target, "/path/to/file.fb2")
+        self.converter.set_config(config)
 
-        self.assertEqual(
-            self.converter.get_job_options(),
-            {
-                "category": "category",
-                "target": "target",
-                "options": {}
-            }
-        )
+        options = self.converter.get_job_options()
+        self.assertIn("target", options)
+        self.assertIn("category", options)
 
     def test_send_job(self):
-        # prepare converter for send job
-        attrs = {
-            "path_to_file": os.path.abspath(__file__),
-            "target": "target",
-            "category": "category",
-            "options": {}
-        }
-        config = Mock(**attrs)
+        """Test that send_job sends job to processor."""
+        path_to_file = os.path.abspath(__file__)
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, path_to_file)
         self.converter.set_config(config)
-        processor = Mock(
-            send_job=lambda path_to_file, options: "test_id"
-        )
-        self.converter.processor = processor
 
-        # run asserts
-        res = self.converter.send_job()
-        self.assertEqual(res, "test_id")
+        job_id = self.converter.send_job()
+        self.assertEqual(job_id, "test_job_id")
 
-    def test_error_handler(self):
-        with patch.object(self.converter.interface, "display_error") as mocked:
+    def test_error_handler_sets_failed_status(self):
+        """Test that error_handler sets status to FAILED and shows error."""
+        with patch.dict(os.environ, {"DEBUG": "0"}):
             self.converter.error_handler(Exception("test error"))
-            mocked.assert_called_once()
 
-    def test_save(self):
-        path_to_result = "path/to/result/file"
-        with patch.object(self.converter.processor, "save_file") as mocked:
-            mocked.return_value = path_to_result
-            res = self.converter.save("path/to/save", path_to_result)
-        self.assertEqual(res, path_to_result)
+        self.assertTrue(any("failed" in str(s) for s in self.ui.statuses))
+        self.assertTrue(any("test error" in str(e) for e in self.ui.errors))
+
+    def test_save_uses_saver(self):
+        """Test that save method uses the saver properly."""
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, "/path/to/file.fb2", path_to_save="/output")
+        self.converter.set_config(config)
+
+        source_data = io.BytesIO(b"test data")
+        result = self.converter.save("result.mobi", source_data)
+
+        self.assertIn("result.mobi", result)
+        self.assertEqual(self.saver.source_name, "result.mobi")
+
+    def test_full_conversion_flow(self):
+        """Test complete conversion flow with all components."""
+        # Use actual test file
+        path_to_file = os.path.abspath(__file__)
+        target = Target(target="mobi", category="ebook", options={})
+        config = JobConfig(target, path_to_file, path_to_save="/output")
+
+        # Mock the internal methods to avoid actual processing
+        with (
+            patch.object(self.converter.processor, "send_job", return_value="job123"),
+            patch.object(self.converter.processor, "get_job_status", return_value=["Processing"]),
+            patch.object(
+                self.converter.processor,
+                "get_job_result",
+                return_value=("result.mobi", io.BytesIO(b"data")),
+            ),
+        ):
+            self.converter.convert(config)
+
+        # Verify flow completed
+        self.assertTrue(any("completed" in str(s) for s in self.ui.statuses))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

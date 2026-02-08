@@ -175,7 +175,7 @@ class LocalProcessor(JobProcessor):
     @staticmethod
     def _prepare_result_bytes(filename):
         try:
-            with open(filename, 'rb') as source_data:
+            with open(filename, "rb") as source_data:
                 return filename, io.BytesIO(source_data.read())
         finally:
             if pathlib.Path(filename).exists():
