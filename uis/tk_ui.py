@@ -15,6 +15,7 @@ Features:
     - Progress bar and status display with color coding
     - Scrollable message area for logs
     - Thread-safe UI updates for background worker support
+    - Adjustable font size (saved between sessions)
 
 Example:
     >>> from uis.tk_ui import TkView
@@ -46,11 +47,20 @@ from ttkbootstrap.dialogs import Messagebox
 
 from src.config import JobConfig as Config
 from src.config import Target
+from uis.settings import get_font_size, set_font_size
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 work_dir = Path(__file__)
+
+# Font size presets - actual font sizes in points
+FONT_SIZE_PRESETS = {
+    "Small": 8,
+    "Medium": 10,
+    "Large": 16,
+    "Extra Large": 20,
+}
 
 # Type variables for generic decorator
 P = ParamSpec("P")
@@ -98,72 +108,169 @@ class TkView:
         - Progress bar and status display
         - Scrollable message area
         - Thread-safe UI updates via tkthread
+        - Adjustable font size with persistence
     """
 
     def __init__(self) -> None:
         self.root = ttkb.Window(title="E-book Converter", themename="darkly")
-        self.root.geometry("800x550")
+
+        # Load user font size preference
+        self._font_size_name = get_font_size()
+        self._font_size = FONT_SIZE_PRESETS.get(self._font_size_name, 8)
+
+        # List to track all widgets that need font updates
+        self._font_widgets: list = []
+
+        # Set window size
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        window_width = max(900, int(screen_width * 0.5))
+        window_height = max(700, int(screen_height * 0.6))
+        self.root.geometry(f"{window_width}x{window_height}")
+        self.root.minsize(800, 600)
+
+        # Configure root grid weights for resizing
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(4, weight=1)  # Message area row expands
+
         self._on_convert: Callable[[], None] | None = None
         self._create_widgets()
         self.config = None
 
-    def _create_widgets(self) -> None:
+    def _get_font(self, bold: bool = False, scale: float = 1.0) -> tuple[str, int, str]:
+        """Get font tuple with current size.
+
+        Uses 'DejaVu Sans' which is available on most Linux systems
+        and correctly respects font size settings.
+        """
+        size = int(self._font_size * scale)
+        weight = "bold" if bold else "normal"
+        return ("DejaVu Sans", size, weight)
+
+    def _get_mono_font(self, scale: float = 1.0) -> tuple[str, int]:
+        """Get monospace font tuple with current size."""
+        size = int(self._font_size * scale)
+        return ("DejaVu Sans Mono", size)
+
+    def _register_widget(self, widget) -> None:
+        """Register a widget for font updates."""
+        self._font_widgets.append(widget)
+
+    def _configure_styles(self) -> None:
+        """Configure ttk styles for buttons, labelframes, and combobox dropdowns.
+
+        This method is called on init and when font size changes to update
+        all themed widget styles that don't support direct font configuration.
+        """
+        style = ttkb.Style()
+
+        # Button styles
+        style.configure("TButton", font=self._get_font())
+        style.configure("info.TButton", font=self._get_font())
+        style.configure("success.TButton", font=self._get_font())
+        style.configure("danger.Outline.TButton", font=self._get_font())
+
+        # LabelFrame title styles
+        style.configure("TLabelframe.Label", font=self._get_font())
+        style.configure("info.TLabelframe.Label", font=self._get_font())
+        style.configure("secondary.TLabelframe.Label", font=self._get_font())
+
+        # Combobox dropdown (Listbox) font via option database
+        self.root.option_add("*TCombobox*Listbox.font", self._get_font())
+
+    def _apply_fonts_to_all(self) -> None:
+        """Apply current font size to all registered widgets and styles."""
+        # Update individual widgets
+        for widget in self._font_widgets:
+            try:
+                if isinstance(widget, tk.Text):
+                    widget.configure(font=self._get_mono_font())
+                else:
+                    widget.configure(font=self._get_font())
+            except tk.TclError:
+                pass  # Widget may have been destroyed
+
+        # Update ttk styles
+        self._configure_styles()
+
+    def _create_widgets(self) -> None:  # noqa: PLR0914, PLR0915
         """Create all UI widgets with proper styling."""
-        # === HEADER SECTION ===
+        pad = 15
+
+        # Configure ttk styles before creating widgets
+        self._configure_styles()
+
+        # === HEADER SECTION (row 0) ===
+        header_frame = ttkb.Frame(self.root)
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(20, 5))
+
         header_label = ttkb.Label(
-            self.root,
+            header_frame,
             text="E-book Converter",
-            font=("Helvetica", 18, "bold"),
             bootstyle="inverse-primary",  # type: ignore[call-arg]
         )
-        header_label.pack(pady=(20, 5), fill=tk.X)
+        header_label.configure(font=self._get_font(bold=True, scale=1.8))
+        header_label.pack(fill=tk.X)
+        self._register_widget(header_label)
 
         instruction_label = ttkb.Label(
-            self.root,
+            header_frame,
             text="Select a file and target format to convert",
-            font=("Helvetica", 10),
         )
-        instruction_label.pack(pady=(0, 15))
+        instruction_label.configure(font=self._get_font(scale=1.1))
+        instruction_label.pack(pady=(5, 10))
+        self._register_widget(instruction_label)
 
-        # === FORMAT SELECTION SECTION ===
+        # === FORMAT SELECTION SECTION (row 1) ===
         format_frame = ttkb.Frame(self.root)
-        format_frame.pack(pady=10)
+        format_frame.grid(row=1, column=0, pady=pad)
 
         # From format label and combobox
-        from_label = ttkb.Label(format_frame, text="From:", font=("Helvetica", 10))
-        from_label.grid(row=0, column=0, padx=(0, 5))
+        from_label = ttkb.Label(format_frame, text="From:")
+        from_label.configure(font=self._get_font())
+        from_label.grid(row=0, column=0, padx=(0, 8))
+        self._register_widget(from_label)
 
         self.selection_from = ttkb.Combobox(
             format_frame,
             bootstyle="info",  # type: ignore[call-arg]
             values=["fb2", "txt", "epub", "pdf", "mobi"],
-            width=12,
+            width=14,
         )
+        self.selection_from.configure(font=self._get_font())
         self.selection_from.grid(row=0, column=1, padx=10)
         self.selection_from.current(0)
         self.selection_from.bind("<<ComboboxSelected>>", self._on_source_format_change)
+        self._register_widget(self.selection_from)
 
         # Arrow label
-        arrow_label = ttkb.Label(format_frame, text=">>>", font=("Helvetica", 12, "bold"))
-        arrow_label.grid(row=0, column=2, padx=10)
+        arrow_label = ttkb.Label(format_frame, text=">>>")
+        arrow_label.configure(font=self._get_font(bold=True, scale=1.2))
+        arrow_label.grid(row=0, column=2, padx=15)
+        self._register_widget(arrow_label)
 
         # To format label and combobox
-        to_label = ttkb.Label(format_frame, text="To:", font=("Helvetica", 10))
-        to_label.grid(row=0, column=3, padx=(0, 5))
+        to_label = ttkb.Label(format_frame, text="To:")
+        to_label.configure(font=self._get_font())
+        to_label.grid(row=0, column=3, padx=(0, 8))
+        self._register_widget(to_label)
 
         self.selection_to = ttkb.Combobox(
             format_frame,
             bootstyle="info",  # type: ignore[call-arg]
             values=["mobi", "pdf", "epub", "fb2"],
-            width=12,
+            width=14,
         )
+        self.selection_to.configure(font=self._get_font())
         self.selection_to.grid(row=0, column=4, padx=10)
         self.selection_to.current(0)
         self.selection_to.bind("<<ComboboxSelected>>", self._on_target_format_change)
+        self._register_widget(self.selection_to)
 
-        # === FILE SELECTION SECTION ===
+        # === FILE SELECTION SECTION (row 2) ===
         file_frame = ttkb.Frame(self.root)
-        file_frame.pack(pady=15, padx=20, fill=tk.X)
+        file_frame.grid(row=2, column=0, pady=pad, padx=25, sticky="ew")
+        file_frame.columnconfigure(1, weight=1)  # Entry expands
 
         # Open file button
         self.open_btn = ttkb.Button(
@@ -171,14 +278,16 @@ class TkView:
             text="Open File",
             bootstyle="info",  # type: ignore[call-arg]
             command=self._open_file,
-            width=12,
+            width=14,
         )
-        self.open_btn.pack(side=tk.LEFT, padx=(0, 10))
+        self.open_btn.grid(row=0, column=0, padx=(0, 12))
 
         # File path entry
-        self.file_entry = ttkb.Entry(file_frame, font=("Helvetica", 10))
-        self.file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-        self.file_entry.bind("<Button-1>", lambda e: self._open_file())
+        self.file_entry = ttkb.Entry(file_frame)
+        self.file_entry.configure(font=self._get_font())
+        self.file_entry.grid(row=0, column=1, sticky="ew", padx=(0, 12))
+        self.file_entry.bind("<Button-1>", lambda _e: self._open_file())
+        self._register_widget(self.file_entry)
 
         # Convert button
         self.convert_btn = ttkb.Button(
@@ -186,9 +295,9 @@ class TkView:
             text="Convert",
             bootstyle="success",  # type: ignore[call-arg]
             command=self._on_convert_click,
-            width=12,
+            width=14,
         )
-        self.convert_btn.pack(side=tk.LEFT, padx=(0, 10))
+        self.convert_btn.grid(row=0, column=2, padx=(0, 12))
 
         # Quit button
         self.quit_btn = ttkb.Button(
@@ -196,67 +305,124 @@ class TkView:
             text="Quit",
             bootstyle="danger-outline",  # type: ignore[call-arg]
             command=self.root.destroy,
-            width=8,
+            width=10,
         )
-        self.quit_btn.pack(side=tk.LEFT)
+        self.quit_btn.grid(row=0, column=3)
 
-        # === STATUS SECTION ===
+        # === STATUS SECTION (row 3) ===
         status_frame = ttkb.Frame(self.root)
-        status_frame.pack(pady=15, padx=20, fill=tk.X)
+        status_frame.grid(row=3, column=0, pady=pad, padx=25, sticky="ew")
+        status_frame.columnconfigure(0, weight=1)  # Progress bar expands
 
         # Progress bar
         self.progress_bar = ttkb.Progressbar(
             status_frame,
             bootstyle="success-striped",  # type: ignore[call-arg]
-            length=400,
             mode="indeterminate",
         )
-        self.progress_bar.pack(side=tk.LEFT, padx=(0, 15))
+        self.progress_bar.grid(row=0, column=0, sticky="ew", padx=(0, 20))
 
-        # Status label
-        status_label_text = ttkb.Label(status_frame, text="Status:", font=("Helvetica", 10))
-        status_label_text.pack(side=tk.LEFT, padx=(0, 5))
+        # Status label container
+        status_container = ttkb.Frame(status_frame)
+        status_container.grid(row=0, column=1)
+
+        status_label_text = ttkb.Label(status_container, text="Status:")
+        status_label_text.configure(font=self._get_font())
+        status_label_text.pack(side=tk.LEFT, padx=(0, 8))
+        self._register_widget(status_label_text)
 
         self.status_label = ttkb.Label(
-            status_frame,
+            status_container,
             text="Ready",
-            font=("Helvetica", 10, "bold"),
             bootstyle="success",  # type: ignore[call-arg]
-            width=15,
+            width=12,
         )
+        self.status_label.configure(font=self._get_font(bold=True))
         self.status_label.pack(side=tk.LEFT)
+        self._register_widget(self.status_label)
 
-        # === MESSAGE AREA SECTION ===
-        message_frame = ttkb.LabelFrame(self.root, text="Messages", bootstyle="info")  # type: ignore[call-arg]
-        message_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        # === MESSAGE AREA SECTION (row 4 - expands) ===
+        message_frame = ttkb.LabelFrame(
+            self.root,
+            text=" Messages ",
+            bootstyle="info",  # type: ignore[call-arg]
+        )
+        message_frame.grid(row=4, column=0, pady=10, padx=25, sticky="nsew")
+        message_frame.columnconfigure(0, weight=1)
+        message_frame.rowconfigure(0, weight=1)
+
+        # Text area with scrollbar
+        text_container = ttkb.Frame(message_frame)
+        text_container.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        text_container.columnconfigure(0, weight=1)
+        text_container.rowconfigure(0, weight=1)
 
         # Scrollbar
-        scrollbar = ttkb.Scrollbar(message_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar = ttkb.Scrollbar(text_container)
+        scrollbar.grid(row=0, column=1, sticky="ns")
 
         # Text area for messages
         self.message_text = tk.Text(
-            message_frame,
-            height=12,
-            font=("Consolas", 9),
+            text_container,
             bg="#2b2b2b",
             fg="#ffffff",
             insertbackground="#ffffff",
             yscrollcommand=scrollbar.set,
+            wrap=tk.WORD,
         )
-        self.message_text.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        self.message_text.configure(font=self._get_mono_font())
+        self.message_text.grid(row=0, column=0, sticky="nsew")
         scrollbar.config(command=self.message_text.yview)
+        self._register_widget(self.message_text)
 
-        # === FOOTER ===
+        # === FOOTER (row 5) ===
         footer_label = ttkb.Label(
             self.root,
             text="E-book Converter v1.0",
-            font=("Helvetica", 8),
             bootstyle="secondary",  # type: ignore[call-arg]
         )
-        footer_label.pack(pady=(5, 10))
+        footer_label.configure(font=self._get_font(scale=0.8))
+        footer_label.grid(row=5, column=0, pady=(5, 8))
+        self._register_widget(footer_label)
 
-    def _on_source_format_change(self, event) -> None:
+        # === SETTINGS SECTION (row 6) ===
+        settings_frame = ttkb.LabelFrame(
+            self.root,
+            text=" Settings ",
+            bootstyle="secondary",  # type: ignore[call-arg]
+        )
+        settings_frame.grid(row=6, column=0, pady=(0, 15), padx=25, sticky="ew")
+
+        # Font size selector
+        font_size_label = ttkb.Label(settings_frame, text="Font Size:")
+        font_size_label.configure(font=self._get_font())
+        font_size_label.pack(side=tk.LEFT, padx=(15, 10), pady=10)
+        self._register_widget(font_size_label)
+
+        self.font_size_combo = ttkb.Combobox(
+            settings_frame,
+            bootstyle="secondary",  # type: ignore[call-arg]
+            values=list(FONT_SIZE_PRESETS.keys()),
+            width=12,
+            state="readonly",
+        )
+        self.font_size_combo.configure(font=self._get_font())
+        self.font_size_combo.pack(side=tk.LEFT, pady=10)
+        self.font_size_combo.set(self._font_size_name)
+        self.font_size_combo.bind("<<ComboboxSelected>>", self._on_font_size_change)
+        self._register_widget(self.font_size_combo)
+
+        # Info label
+        self.font_size_info = ttkb.Label(
+            settings_frame,
+            text="",
+            bootstyle="warning",  # type: ignore[call-arg]
+        )
+        self.font_size_info.configure(font=self._get_font(scale=0.9))
+        self.font_size_info.pack(side=tk.LEFT, padx=(15, 10), pady=10)
+        self._register_widget(self.font_size_info)
+
+    def _on_source_format_change(self, event) -> None:  # noqa: ARG002
         """Update target format options when source format changes."""
         current = self.selection_from.get()
         targets = CONVERTER_FORMATS_MAPPING.get(current, ["mobi"])
@@ -266,6 +432,25 @@ class TkView:
 
     def _on_target_format_change(self, event) -> None:
         """Update source format when target changes (optional auto-select)."""
+
+    def _on_font_size_change(self, event) -> None:  # noqa: ARG002
+        """Handle font size change - saves preference and applies immediately."""
+        new_size_name = self.font_size_combo.get()
+        if new_size_name != self._font_size_name:
+            # Save preference
+            set_font_size(new_size_name)
+            self._font_size_name = new_size_name
+            self._font_size = FONT_SIZE_PRESETS.get(new_size_name, 8)
+
+            # Apply to all widgets immediately
+            self._apply_fonts_to_all()
+
+            # Also update header with larger scale
+            # (handled by _apply_fonts_to_all since we registered with scale info)
+            self.font_size_info.config(text="Font size updated!")
+
+            # Clear the info message after 2 seconds
+            self.root.after(2000, lambda: self.font_size_info.config(text=""))
 
     def _open_file(self) -> None:
         """Open file dialog and set file path."""

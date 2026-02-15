@@ -28,6 +28,7 @@ from savers.local_saver import LocalFileSaver
 from src.application import Application
 from src.converter import Converter
 from uis.cli_ui import CLIView
+from uis.tk_ui import TkView
 from workers.worker import ThreadWorker
 
 logger = logging.getLogger(__name__)
@@ -62,8 +63,8 @@ def main() -> None:
     - Interface startup
     """
     # Step 1: setup interface
-    user_interface = CLIView()
-    # user_interface = TkView()
+    # user_interface = CLIView()
+    user_interface = TkView()
 
     # Step 2: setup main processor
     processor = ProcessorOnDocker(TextRedirector(user_interface))
