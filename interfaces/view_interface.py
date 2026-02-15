@@ -1,20 +1,39 @@
-"""View Protocol for MVP pattern.
+"""View Protocols for MVP pattern with Interface Segregation.
 
-This module defines the ViewProtocol - a passive view interface that works
-with any UI implementation (CLI, Tk, Web, etc.). The view is responsible
-only for rendering and capturing user input, with no business logic.
+This module defines segregated view interfaces following the Interface
+Segregation Principle (ISP). Instead of one fat ViewProtocol with 9 methods,
+we split into focused protocols:
 
-The Presenter (Application) handles all logic and communicates with the View
-through this protocol, making it easy to swap UI implementations without
-changing business logic.
+Protocol Hierarchy:
+-------------------
+    ConverterOutputProtocol (4 methods)
+        show_status(), show_message(), show_error(), show_result()
 
-The View uses the existing Config and Format system to build JobConfig,
-so individual getters for file path, source/target format are not needed.
+    AppViewProtocol (3 methods)
+        run(), get_config(), set_on_convert()
+
+    PresenterViewProtocol = ConverterOutputProtocol + AppViewProtocol
+        Used by AppPresenter (7 methods total)
+
+    ViewProtocol = PresenterViewProtocol + UI extras
+        Used by UI implementations (9 methods total)
+
+Usage:
+------
+    - AppPresenter uses PresenterViewProtocol (only what it needs)
+    - TkView, CLIView implement ViewProtocol (full interface)
+    - Converter has no view dependency (uses EventEmitter)
+
+Example:
+    >>> class AppPresenter:
+    ...     def __init__(self, view: PresenterViewProtocol, converter: Converter):
+    ...         self.view = view
+    ...         converter.events.on("status", view.show_status)
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,45 +42,29 @@ if TYPE_CHECKING:
     from src.config import JobConfig
 
 
-class ViewProtocol(Protocol):
-    """Passive view interface for MVP pattern.
+@runtime_checkable
+class ConverterOutputProtocol(Protocol):
+    """Protocol for receiving converter output/events.
 
-    This protocol defines a UI-agnostic interface that works for CLI,
-    Tkinter, Web, or any other UI implementation. Views implementing
-    this protocol should be passive - they only render data and capture
-    user input, with no business logic.
+    This minimal interface defines what the Converter needs to communicate
+    its progress. Application subscribes these methods to Converter events.
 
-    The protocol is divided into four categories:
-    1. Config: Get JobConfig built from user input
-    2. Output: Methods to display information to user
-    3. Events: Callbacks for user actions
-    4. Lifecycle: Application flow control
+    These 4 methods map directly to Converter's event emissions:
+    - 'status' event -> show_status()
+    - 'message' event -> show_message()
+    - 'error' event -> show_error()
+    - 'result' event -> show_result()
 
     Example:
-        >>> class TkView:
-        ...     def get_config(self) -> JobConfig:
-        ...         return self._build_config_from_ui()
-        ...
-        ...     def show_status(self, status: str) -> None:
-        ...         self.status_label.config(text=status)
-
-        >>> class CLIView:
-        ...     def get_config(self) -> JobConfig:
-        ...         return self.config  # built during setup()
-        ...
-        ...     def show_status(self, status: str) -> None:
-        ...         print(f">>> STATUS: {status}")
+        >>> converter.events.on('status', view.show_status)
+        >>> converter.events.on('message', view.show_message)
     """
 
-    # =========================================================================
-    # OUTPUT: Display information to user
-    # =========================================================================
-
     def show_status(self, status: str) -> None:
-        """Display the current status.
+        """Display the current conversion status.
 
         Args:
-            status: Status message (e.g., 'Ready', 'Processing', 'Completed')
+            status: Status string (e.g., 'ready', 'processing', 'completed', 'failed')
         """
         ...
 
@@ -89,6 +92,82 @@ class ViewProtocol(Protocol):
         """
         ...
 
+
+@runtime_checkable
+class AppViewProtocol(Protocol):
+    """Protocol for Application-View interaction.
+
+    This interface defines what the Application (Presenter) needs from
+    the View for lifecycle control and user input handling.
+
+    Methods:
+    - run(): Start the view (mainloop or linear flow)
+    - get_config(): Get user's conversion configuration
+    - set_on_convert(): Register callback for conversion trigger
+    """
+
+    def run(self) -> None:
+        """Start the view.
+
+        For CLI: Runs the input prompts and triggers callback
+        For Tk: Starts mainloop()
+        For Web: Starts server
+
+        This method may block (Tk mainloop) or run synchronously (CLI).
+        """
+        ...
+
+    def get_config(self) -> JobConfig:
+        """Get the current job configuration.
+
+        Returns the JobConfig object built from user input. This is called
+        by the Application when the user triggers conversion.
+
+        Returns:
+            JobConfig object with target format and file path
+        """
+        ...
+
+    def set_on_convert(self, callback: Callable[[], None]) -> None:
+        """Register callback for when user triggers conversion.
+
+        The view calls this callback when the user clicks Convert button
+        (Tk) or confirms conversion (CLI).
+
+        Args:
+            callback: Function to call when conversion is triggered
+        """
+        ...
+
+
+@runtime_checkable
+class PresenterViewProtocol(ConverterOutputProtocol, AppViewProtocol, Protocol):
+    """Minimal view interface required by AppPresenter.
+
+    Combines the two segregated protocols that AppPresenter actually needs:
+    - AppViewProtocol: run(), get_config(), set_on_convert()
+    - ConverterOutputProtocol: show_status(), show_message(), show_error(), show_result()
+
+    This is the Interface Segregation principle in action - AppPresenter
+    depends on exactly what it needs, nothing more.
+    """
+
+
+@runtime_checkable
+class ViewProtocol(PresenterViewProtocol, Protocol):
+    """Full view interface for UI implementations.
+
+    This protocol extends PresenterViewProtocol with additional display
+    methods that are UI-specific but not needed by AppPresenter.
+
+    UI implementations (TkView, CLIView) should implement this full protocol.
+    AppPresenter should use PresenterViewProtocol instead.
+
+    Additional methods:
+    - show_formats(): Display available conversion formats
+    - show_progress(): Update progress bar/indicator
+    """
+
     def show_formats(self, formats: list[str]) -> None:
         """Display available target formats.
 
@@ -102,50 +181,5 @@ class ViewProtocol(Protocol):
 
         Args:
             progress: Progress value (0.0 to 1.0), or -1 for indeterminate
-        """
-        ...
-
-    # =========================================================================
-    # EVENTS: Callbacks for user actions
-    # =========================================================================
-
-    def set_on_convert(self, callback: Callable[[], None]) -> None:
-        """Register callback for when user triggers conversion.
-
-        The view calls this callback when the user clicks Convert button
-        (Tk) or confirms conversion (CLI).
-
-        Args:
-            callback: Function to call when conversion is triggered
-        """
-        ...
-
-    # =========================================================================
-    # CONFIG: Get configuration for conversion
-    # =========================================================================
-
-    def get_config(self) -> JobConfig:
-        """Get the current job configuration.
-
-        Returns the JobConfig object built from user input. This is called
-        by the Application when the user triggers conversion.
-
-        Returns:
-            JobConfig object with target format and file path
-        """
-        ...
-
-    # =========================================================================
-    # LIFECYCLE: Application flow control
-    # =========================================================================
-
-    def run(self) -> None:
-        """Start the view.
-
-        For CLI: Runs the input prompts and triggers callback
-        For Tk: Starts mainloop()
-        For Web: Starts server
-
-        This method may block (Tk mainloop) or run synchronously (CLI).
         """
         ...

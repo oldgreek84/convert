@@ -25,9 +25,10 @@ import logging
 import formats
 from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
 from savers.local_saver import LocalFileSaver
-from src.application import Application
+from src.application import AppPresenter
 from src.converter import Converter
-from uis.cli_ui import CLIView
+
+# from uis.cli_ui import CLIView
 from uis.tk_ui import TkView
 from workers.worker import ThreadWorker
 
@@ -76,11 +77,11 @@ def main() -> None:
 
     # Step 4: setup Converter with required params and non-blocking worker
     worker = ThreadWorker()
-    converter = Converter(user_interface, processor, saver, worker)  # type: ignore[arg-type]
+    converter = Converter(processor, saver, worker)  # type: ignore[arg-type]
 
-    # Step 5: run processing with application class
-    app = Application(converter, user_interface)
-    app.run()
+    # Step 5: run processing with presenter
+    presenter = AppPresenter(converter, user_interface)
+    presenter.run()
 
 
 if __name__ == "__main__":

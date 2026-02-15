@@ -1,13 +1,28 @@
-"""Application Controller for MVP Pattern.
+"""Presenter layer for MVP Pattern.
 
-This module provides the Application class that acts as the orchestrator
-between the View (UI) and the Converter (Model). It implements the
-callback-based approach that works with both synchronous (CLI) and
-event-driven (Tk) user interfaces.
+This module provides the AppPresenter class that acts as the Presenter
+in the MVP (Model-View-Presenter) pattern.
 
-The Application breaks the bidirectional dependency between UI and Converter
-by acting as a mediator, registering callbacks with the View and delegating
-conversion requests to the Converter.
+Architecture (Two-Layer Orchestration):
+---------------------------------------
+    ┌─────────────────────────────────────────────────────────┐
+    │                    AppPresenter                         │
+    │              (Presentation Layer Orchestrator)          │
+    │            Coordinates: View <-> Converter              │
+    ├─────────────────────────────────────────────────────────┤
+    │                      Converter                          │
+    │               (Business Layer Orchestrator)             │
+    │         Coordinates: Processor -> Saver -> Worker       │
+    └─────────────────────────────────────────────────────────┘
+
+The AppPresenter:
+1. Owns the View reference (View is only held here, not in Converter)
+2. Subscribes to Converter events and forwards them to View
+3. Registers callbacks with View and delegates to Converter
+
+This design follows Interface Segregation Principle:
+- Converter has no UI knowledge, only emits events
+- AppPresenter bridges events to View methods
 """
 
 from __future__ import annotations
@@ -15,64 +30,90 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interfaces.view_interface import ViewProtocol
+    from interfaces.view_interface import PresenterViewProtocol
     from src.converter import Converter
 
 
-class Application:
-    """Application controller that orchestrates View and Converter.
+class AppPresenter:
+    """Presentation layer orchestrator implementing MVP Presenter role.
 
-    This class implements the MVP (Model-View-Presenter) pattern where:
-    - View: Passive UI (TkView, CLIView) - only renders and captures input
-    - Presenter: This Application class - handles logic and coordination
-    - Model: Converter - business logic for e-book conversion
+    This class sits between the View (UI) and the Converter (business logic),
+    enabling complete decoupling:
+    - View only knows how to render and capture user input
+    - Converter only knows how to convert files (no UI knowledge)
+    - AppPresenter bridges them via event subscription
 
-    The Application:
-    1. Registers a convert callback with the View
-    2. Starts the View (which may block for event loop)
-    3. When View triggers conversion, the callback executes converter.convert()
+    Two-Layer Orchestration Pattern:
+    - AppPresenter: Presentation layer - coordinates View and Converter
+    - Converter: Business layer - coordinates Processor, Saver, Worker
 
-    This pattern allows:
-    - CLI: Linear flow (setup -> confirm -> convert)
-    - Tk: Event-driven flow (mainloop with button callback)
+    Event Flow:
+        User action -> View -> AppPresenter -> Converter
+        Converter emits -> AppPresenter forwards -> View displays
+
+    Interface Segregation:
+        AppPresenter uses PresenterViewProtocol which combines only what it needs:
+        - From AppViewProtocol: run(), get_config(), set_on_convert()
+        - From ConverterOutputProtocol: show_status(), show_message(), show_error(), show_result()
 
     Attributes:
-        converter: The Converter instance for processing conversions
-        view: The View instance for user interaction
+        converter: Business layer orchestrator for conversion operations.
+        view: Passive View implementation for user interaction.
 
     Example:
-        >>> view = TkView()  # or CLIView()
-        >>> converter = Converter(view, processor, saver, worker)
-        >>> app = Application(converter, view)
-        >>> app.run()
+        >>> view = TkView()
+        >>> converter = Converter(processor, saver, worker)
+        >>> presenter = AppPresenter(converter, view)
+        >>> presenter.run()
     """
 
-    def __init__(self, converter: Converter, view: ViewProtocol) -> None:
-        """Initialize the application with converter and view.
+    def __init__(self, converter: Converter, view: PresenterViewProtocol) -> None:
+        """Initialize presenter with converter and view.
 
         Args:
-            converter: The Converter instance for e-book conversion
-            view: The View instance implementing ViewProtocol
+            converter: Business layer orchestrator for e-book conversion.
+            view: View implementing PresenterViewProtocol.
         """
         self.converter = converter
         self.view = view
+
+        # Register view callback for conversion trigger
         self.view.set_on_convert(self._handle_convert)
 
-    def run(self) -> None:
-        """Start the application.
+        # Subscribe to converter events and forward to view
+        self._subscribe_to_converter_events()
 
-        Starts the View which handles user interaction. For CLI, this runs
-        synchronously. For Tk, this enters the mainloop and blocks until
-        the window is closed.
+    def _subscribe_to_converter_events(self) -> None:
+        """Subscribe view methods to converter events.
+
+        Bridges Converter events to View display methods:
+        - 'status' -> View.show_status()
+        - 'message' -> View.show_message()
+        - 'error' -> View.show_error()
+        - 'result' -> View.show_result()
+        """
+        self.converter.events.on("status", self.view.show_status)
+        self.converter.events.on("message", self.view.show_message)
+        self.converter.events.on("error", self.view.show_error)
+        self.converter.events.on("result", self.view.show_result)
+
+    def run(self) -> None:
+        """Start the application by running the view.
+
+        For CLI views, this runs synchronously until completion.
+        For GUI views (Tk), this enters the mainloop and blocks
+        until the window is closed.
         """
         self.view.run()
 
     def _handle_convert(self) -> None:
         """Handle conversion request from View.
 
-        This callback is invoked by the View when the user triggers
-        conversion (e.g., clicks Convert button or confirms in CLI).
-        It retrieves the configuration from the View and delegates
-        to the Converter.
+        Callback invoked when user triggers conversion (button click,
+        CLI confirm). Retrieves config from View and delegates to Converter.
         """
         self.converter.convert(self.view.get_config())
+
+
+# Backward compatibility alias
+Application = AppPresenter

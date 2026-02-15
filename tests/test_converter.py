@@ -10,10 +10,27 @@ import os
 import unittest
 from unittest.mock import patch
 
+from src.config import JobConfig, Target
 from src.converter import Converter
 from src.exceptions import ConverterError
-from src.config import JobConfig, Target
-from tests.common import DummyJobProcessor, DummyUI, DummyWorker, DummySaver
+from tests.common import DummyJobProcessor, DummySaver, DummyWorker
+
+
+class EventCollector:
+    """Collects events emitted by Converter for test assertions."""
+
+    def __init__(self):
+        self.statuses = []
+        self.messages = []
+        self.errors = []
+        self.results = []
+
+    def subscribe(self, converter: Converter) -> None:
+        """Subscribe to all converter events."""
+        converter.events.on("status", self.statuses.append)
+        converter.events.on("message", self.messages.append)
+        converter.events.on("error", self.errors.append)
+        converter.events.on("result", self.results.append)
 
 
 class ConverterTestCase(unittest.TestCase):
@@ -21,17 +38,18 @@ class ConverterTestCase(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures with all required dependencies."""
-        self.ui = DummyUI()
         self.processor = DummyJobProcessor()
         self.saver = DummySaver()
-        self.converter = Converter(interface=self.ui, processor=self.processor, saver=self.saver)
+        self.converter = Converter(processor=self.processor, saver=self.saver)
+        self.events = EventCollector()
+        self.events.subscribe(self.converter)
 
     def test_init_creates_converter(self):
         """Test that __init__ creates converter with all dependencies."""
         self.assertIsNotNone(self.converter)
-        self.assertEqual(self.converter.interface, self.ui)
         self.assertEqual(self.converter.processor, self.processor)
         self.assertEqual(self.converter.saver, self.saver)
+        self.assertIsNotNone(self.converter.events)
 
     def test_set_config(self):
         """Test that set_config stores the configuration."""
@@ -116,12 +134,12 @@ class ConverterTestCase(unittest.TestCase):
         self.assertEqual(job_id, "test_job_id")
 
     def test_error_handler_sets_failed_status(self):
-        """Test that error_handler sets status to FAILED and shows error."""
+        """Test that error_handler sets status to FAILED and emits error event."""
         with patch.dict(os.environ, {"DEBUG": "0"}):
             self.converter.error_handler(Exception("test error"))
 
-        self.assertTrue(any("failed" in str(s) for s in self.ui.statuses))
-        self.assertTrue(any("test error" in str(e) for e in self.ui.errors))
+        self.assertTrue(any("failed" in str(s) for s in self.events.statuses))
+        self.assertTrue(any("test error" in str(e) for e in self.events.errors))
 
     def test_save_uses_saver(self):
         """Test that save method uses the saver properly."""
@@ -132,7 +150,7 @@ class ConverterTestCase(unittest.TestCase):
         source_data = io.BytesIO(b"test data")
         result = self.converter.save("result.mobi", source_data)
 
-        self.assertIn("result.mobi", result)
+        self.assertIn("result.mobi", str(result))
         self.assertEqual(self.saver.source_name, "result.mobi")
 
     def test_full_conversion_flow(self):
@@ -154,8 +172,8 @@ class ConverterTestCase(unittest.TestCase):
         ):
             self.converter.convert(config)
 
-        # Verify flow completed
-        self.assertTrue(any("completed" in str(s) for s in self.ui.statuses))
+        # Verify flow completed via event emissions
+        self.assertTrue(any("completed" in str(s) for s in self.events.statuses))
 
 
 if __name__ == "__main__":
