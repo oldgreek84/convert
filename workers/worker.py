@@ -8,8 +8,8 @@ from typing import Any
 
 import requests
 
+from src.event_emitter import EventEmitter
 from utils.common_utils import coroutine
-from workers.observer import Signal
 
 _DEFAULT_POOL = ThreadPoolExecutor()
 
@@ -88,11 +88,11 @@ class ThreadWorker:
     This worker provides concurrent execution capabilities using Python's
     threading module. It allows conversion operations to run in the background
     while keeping the user interface responsive. The worker handles error
-    propagation and result retrieval through a signal-based mechanism.
+    propagation and result retrieval through an event-based mechanism.
 
     Features:
         - Background thread execution
-        - Error handling with signal emission
+        - Error handling with event emission
         - Result storage and retrieval
         - Completion status checking
         - Callback-based error handling
@@ -104,9 +104,9 @@ class ThreadWorker:
     4. Error handlers are called automatically if exceptions occur
 
     Attributes:
-        _thread: Background thread instance
-        _result: Stored result from function execution
-        _error: Signal object for error handling
+        _thread: Background thread instance.
+        _result: Stored result from function execution.
+        events: EventEmitter for error handling and notifications.
 
     Example:
         >>> worker = ThreadWorker()
@@ -120,7 +120,7 @@ class ThreadWorker:
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
         self._result = None
-        self._error = Signal()
+        self.events = EventEmitter()
 
     def is_completed(self) -> bool:
         if self._thread is None:
@@ -131,7 +131,7 @@ class ThreadWorker:
         return self._result
 
     def set_error_handler(self, handler: Callable) -> None:
-        self._error.connect(handler)
+        self.events.on("error", handler)
 
     def execute(self, func: Callable, *args, **kwargs) -> None:
         self._thread = threading.Thread(target=self.wrapper, args=(func, *args), kwargs=kwargs)
@@ -142,7 +142,7 @@ class ThreadWorker:
             result = func(*args, **kwargs)
             self._result = result
         except Exception as ex:
-            self._error.emit(ex)
+            self.events.emit("error", ex)
 
 
 class WorkerCoroutine:
