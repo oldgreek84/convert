@@ -94,7 +94,7 @@ CONVERTER_FORMATS_MAPPING = {
     "ebook": ["mobi", "fb2", "epub", "txt"],
 }
 
-
+# TODO: make Tk View use format domain for choose available formats
 class TkView:
     """Passive View implementing ViewProtocol with ttkbootstrap styling.
 

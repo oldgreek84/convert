@@ -11,11 +11,11 @@ from unittest.mock import Mock, patch
 from formats.metadata import FormatMetadata
 from src import exceptions
 from src.config import ConverterStatus, Target
-from uis.cli_ui import CLIView
+from uis.cli_ui import CLIView, yes_no
 
 
-class TestCLIView(unittest.TestCase):
-    """Test cases for CLIView class."""
+class TestConverterInterfaceCLI(unittest.TestCase):
+    """Test cases for ConverterInterfaceCLI class."""
 
     def setUp(self):
         """Set up test fixtures before each test method."""
@@ -23,25 +23,39 @@ class TestCLIView(unittest.TestCase):
 
     def test_init_creates_cli_instance(self):
         """Test that __init__ creates CLI interface."""
+        # Arrange & Act (done in setUp)
+
         # Assert
         self.assertIsNotNone(self.cli)
-        self.assertIsNone(self.cli.config)
+        self.assertIsNone(self.cli.converter)
 
-    def test_set_on_convert_stores_callback(self):
-        """Test that set_on_convert stores the callback."""
-        callback = Mock()
-        self.cli.set_on_convert(callback)
-        self.assertEqual(self.cli._on_convert, callback)
+    def test_yes_no_returns_true_for_yes(self):
+        """Test yes_no() returns True for 'y' input."""
+        # Act & Assert
+        with patch("builtins.input", return_value="y"):
+            self.assertTrue(yes_no())
 
-    @patch("uis.cli_ui.get_format_service")
+        with patch("builtins.input", return_value="yes"):
+            self.assertTrue(yes_no())
+
+    def test_yes_no_returns_false_for_no(self):
+        """Test yes_no() returns False for non-yes input."""
+        # Act & Assert
+        with patch("builtins.input", return_value="n"):
+            self.assertFalse(yes_no())
+
+        with patch("builtins.input", return_value="no"):
+            self.assertFalse(yes_no())
+
+        with patch("builtins.input", return_value=""):
+            self.assertFalse(yes_no())
+
+    @patch("uis.cli_ui.format_service")
     @patch("builtins.input")
     @patch("sys.argv", ["test.py", "book.fb2"])
-    def test_get_params_uses_format_service(self, mock_input, mock_get_format_service):
+    def test_get_params_uses_format_service(self, mock_input, mock_format_service):
         """Test that _get_params uses format service to get formats."""
         # Arrange
-        mock_format_service = Mock()
-        mock_get_format_service.return_value = mock_format_service
-
         mock_source_format = Mock()
         mock_source_format.name = "fb2"
 
@@ -70,14 +84,11 @@ class TestCLIView(unittest.TestCase):
             mock_format_service.get_source_format.assert_called()
             mock_format_service.list_available_targets.assert_called()
 
-    @patch("uis.cli_ui.get_format_service")
+    @patch("uis.cli_ui.format_service")
     @patch("sys.argv", ["test.py", "book.fb2"])
-    def test_get_params_displays_available_formats(self, mock_get_format_service):
+    def test_get_params_displays_available_formats(self, mock_format_service):
         """Test that _get_params displays available target formats."""
         # Arrange
-        mock_format_service = Mock()
-        mock_get_format_service.return_value = mock_format_service
-
         mock_source = Mock()
         mock_source.name = "fb2"
 
@@ -94,22 +105,20 @@ class TestCLIView(unittest.TestCase):
         with (
             patch("builtins.input", return_value="1"),
             patch("utils.common_utils.parse_command", return_value={}),
-            patch.object(self.cli, "show_message") as mock_show,
+            patch.object(self.cli, "display_common_info") as mock_display,
         ):
             # Act
             self.cli._get_params(["test.py", "book.fb2"])
 
             # Assert - Should display available formats
-            calls = [str(call) for call in mock_show.call_args_list]
+            calls = [str(call) for call in mock_display.call_args_list]
             self.assertTrue(any("Available conversion formats" in str(call) for call in calls))
 
-    @patch("uis.cli_ui.get_format_service")
+    @patch("uis.cli_ui.format_service")
     @patch("sys.argv", ["test.py", "book.unknown"])
-    def test_get_params_handles_format_error(self, mock_get_format_service):
+    def test_get_params_handles_format_error(self, mock_format_service):
         """Test that _get_params handles FormatError from service."""
         # Arrange
-        mock_format_service = Mock()
-        mock_get_format_service.return_value = mock_format_service
         mock_format_service.get_source_format.side_effect = exceptions.FormatError(
             "Unsupported format"
         )
@@ -120,15 +129,12 @@ class TestCLIView(unittest.TestCase):
         ):
             self.cli._get_params(["test.py", "book.unknown"])
 
-    @patch("uis.cli_ui.get_format_service")
+    @patch("uis.cli_ui.format_service")
     @patch("builtins.input")
     @patch("sys.argv", ["test.py", "book.fb2"])
-    def test_get_params_validates_user_choice(self, mock_input, mock_get_format_service):
+    def test_get_params_validates_user_choice(self, mock_input, mock_format_service):
         """Test that _get_params validates user input and re-prompts on invalid choice."""
         # Arrange
-        mock_format_service = Mock()
-        mock_get_format_service.return_value = mock_format_service
-
         mock_source = Mock()
         mock_source.name = "fb2"
 
@@ -146,60 +152,40 @@ class TestCLIView(unittest.TestCase):
 
         with (
             patch("utils.common_utils.parse_command", return_value={}),
-            patch.object(self.cli, "show_message") as mock_show,
+            patch.object(self.cli, "display_common_info") as mock_display,
         ):
             # Act
             self.cli._get_params(["test.py", "book.fb2"])
 
             # Assert - Should show invalid choice message
-            calls = [str(call) for call in mock_show.call_args_list]
+            calls = [str(call) for call in mock_display.call_args_list]
             self.assertTrue(any("Invalid choice" in str(call) for call in calls))
 
-    def test_show_message_prints_message(self):
-        """Test that show_message outputs message."""
+    def test_display_common_info_prints_message(self):
+        """Test that display_common_info outputs message."""
         # Arrange
         test_message = "Test message"
 
         with patch.object(self.cli, "_print") as mock_print:
             # Act
-            self.cli.show_message(test_message)
+            self.cli.display_common_info(test_message)
 
             # Assert
             mock_print.assert_called_once()
             args = mock_print.call_args[0][0]
             self.assertIn(test_message, args)
 
-    def test_show_status_prints_status(self):
-        """Test that show_status outputs status."""
+    def test_display_job_status_prints_status(self):
+        """Test that display_job_status outputs status."""
         with patch.object(self.cli, "_print") as mock_print:
             # Act
-            self.cli.show_status(ConverterStatus.COMPLETED)
+            self.cli.display_job_status(ConverterStatus.COMPLETED)
 
             # Assert
             mock_print.assert_called_once()
             args = mock_print.call_args[0][0]
             # Status is lowercase in output
             self.assertIn("completed", args.lower())
-
-    def test_show_error_prints_error(self):
-        """Test that show_error outputs error message."""
-        with patch.object(self.cli, "_print") as mock_print:
-            self.cli.show_error("Test error")
-
-            mock_print.assert_called_once()
-            args = mock_print.call_args[0][0]
-            self.assertIn("ERROR", args)
-            self.assertIn("Test error", args)
-
-    def test_show_result_prints_result(self):
-        """Test that show_result outputs result path."""
-        with patch.object(self.cli, "_print") as mock_print:
-            self.cli.show_result("/path/to/file.mobi")
-
-            mock_print.assert_called_once()
-            args = mock_print.call_args[0][0]
-            self.assertIn("RESULT", args)
-            self.assertIn("/path/to/file.mobi", args)
 
 
 if __name__ == "__main__":

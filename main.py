@@ -21,6 +21,7 @@ converter with appropriate components based on the selected interface.
 """
 
 import logging
+import os
 
 import formats
 from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
@@ -76,8 +77,14 @@ def main() -> None:
     # saver = GoogleDriveSaver()
 
     # Step 4: setup Converter with required params and non-blocking worker
+    debug = os.getenv('DEBUG') == "1"
+
     worker = ThreadWorker()
-    converter = Converter(processor, saver, worker)  # type: ignore[arg-type]
+    converter = Converter(
+        processor=processor,
+        saver=saver,
+        worker=worker,
+        debug=debug)  # type: ignore[arg-type]
 
     # Step 5: run processing with presenter
     presenter = AppPresenter(converter, user_interface)

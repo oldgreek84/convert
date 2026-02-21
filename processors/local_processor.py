@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import io
+import pathlib
 import subprocess
 from typing import TYPE_CHECKING
 
 from interfaces.processor_interface import JobProcessor
 from processors import ProcessorError
-import pathlib
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -55,7 +55,7 @@ class LocalProcessor(JobProcessor):
             The subprocess.Popen object for the specified job
 
         Raises:
-            KeyError: If the job ID is not found in active processes
+            ProcessorError: If the job ID is not found in active processes
         """
         return self.processes[job_id][0]
 

@@ -135,11 +135,20 @@ class ConverterTestCase(unittest.TestCase):
 
     def test_error_handler_sets_failed_status(self):
         """Test that error_handler sets status to FAILED and emits error event."""
-        with patch.dict(os.environ, {"DEBUG": "0"}):
-            self.converter.error_handler(Exception("test error"))
+        self.converter.error_handler(Exception("test error"))
 
         self.assertTrue(any("failed" in str(s) for s in self.events.statuses))
         self.assertTrue(any("test error" in str(e) for e in self.events.errors))
+
+    def test_error_handler_debug_mode(self):
+        """Test that error_handler includes context when debug=True."""
+        converter = Converter(processor=self.processor, saver=self.saver, debug=True)
+        events = EventCollector()
+        events.subscribe(converter)
+        converter.error_handler(Exception("test error"))
+
+        self.assertTrue(any("failed" in str(s) for s in events.statuses))
+        self.assertTrue(any("Context:" in str(e) for e in events.errors))
 
     def test_save_uses_saver(self):
         """Test that save method uses the saver properly."""

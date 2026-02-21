@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from functools import partial
 from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING
@@ -32,12 +31,6 @@ if TYPE_CHECKING:
 #     handle state transitions and emit events.
 #     Files to create: src/status_manager.py
 
-# TODO(SRP-3): Extract error handling/formatting to a separate ErrorHandler class.
-#     Current: error_handler() contains error formatting logic with DEBUG check.
-#     This should be injectable to support different error formatting strategies
-#     (verbose, minimal, structured JSON, etc.).
-#     Files to create: src/error_handler.py
-
 # TODO(OCP-1): Make execution strategy injectable instead of hardcoded.
 #     Current: setup_converter_executor() has hardcoded logic for worker wrapping.
 #     Create an ExecutionStrategy interface with SyncStrategy and AsyncStrategy
@@ -49,12 +42,6 @@ if TYPE_CHECKING:
 #     "{message} [{status}]" in send_job() and get_result(). Create a
 #     MessageFormatter protocol that can be injected for customization.
 #     Files to create: interfaces/message_formatter.py
-
-# TODO(DIP-1): Inject debug mode via config instead of using os.getenv().
-#     Current: error_handler() directly calls os.getenv("DEBUG"). This is a
-#     concrete dependency on environment. Debug mode should be passed via
-#     a DebugConfig or as constructor parameter.
-#     Modify: __init__ to accept debug: bool = False parameter
 
 # TODO(DIP-2): Inject file system operations for better testability.
 #     Current: validate_path() uses Path(path_to_file).is_file() directly.
@@ -118,11 +105,13 @@ class Converter:
         processor: JobProcessor,
         saver: SaverProtocol,
         worker: Worker | None = None,
+        debug: bool = False,
     ) -> None:
         self.processor = processor
         self.saver = saver
         self.worker = worker
         self.config: Config | None = None
+        self.debug = debug
 
         self.events = EventEmitter()
         self.set_status(ConverterStatus.READY)
@@ -301,7 +290,6 @@ class Converter:
         return self.processor.get_job_result(job_id)
 
     # TODO(SRP-3): Extract to injectable ErrorHandler class.
-    # TODO(DIP-1): Replace os.getenv("DEBUG") with injected debug config.
     def error_handler(self, error: Exception) -> None:
         """Handle conversion errors.
 
@@ -312,7 +300,7 @@ class Converter:
             error: Exception that occurred during conversion.
         """
         error_message = str(error)
-        if os.getenv("DEBUG", "0") == "1":
+        if self.debug:
             context = create_error_context(error=error)
             error_message = f"{error} | Context: {context}"
 
