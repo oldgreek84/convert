@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from src.config import ConverterStatus
 from src.config import JobConfig as Config
+from src.validator import ConfigValidator, FilePathValidator, Validator
 from src.event_emitter import EventEmitter
 from src.exceptions import ConverterError, create_error_context
 
@@ -19,40 +20,13 @@ if TYPE_CHECKING:
     from src.config import Target
 
 
-# TODO(SRP-1): Extract validation logic to a separate Validator class.
-#     Current: validate_config() and validate_path() are validation responsibilities
-#     mixed with orchestration. Create a ConfigValidator or ConversionValidator
-#     that can be injected, allowing different validation strategies.
-#     Files to create: src/validators/config_validator.py
-
 # TODO(SRP-2): Extract status management to a separate StatusManager class.
-#     Current: set_status(), get_status() and status attribute management is
-#     a separate concern from conversion orchestration. StatusManager could
-#     handle state transitions and emit events.
-#     Files to create: src/status_manager.py
 
 # TODO(OCP-1): Make execution strategy injectable instead of hardcoded.
-#     Current: setup_converter_executor() has hardcoded logic for worker wrapping.
-#     Create an ExecutionStrategy interface with SyncStrategy and AsyncStrategy
-#     implementations. Converter should accept strategy via constructor.
-#     Files to create: interfaces/execution_strategy.py, src/strategies/
 
 # TODO(OCP-2): Make message formatting configurable/injectable.
-#     Current: Hardcoded message formats like "Job ID: {job_id}" and
-#     "{message} [{status}]" in send_job() and get_result(). Create a
-#     MessageFormatter protocol that can be injected for customization.
-#     Files to create: interfaces/message_formatter.py
-
-# TODO(DIP-2): Inject file system operations for better testability.
-#     Current: validate_path() uses Path(path_to_file).is_file() directly.
-#     Create a FileSystem protocol with exists(), is_file() methods that
-#     can be mocked in tests without touching real filesystem.
-#     Files to create: interfaces/filesystem.py
 
 # TODO(LSP-1): Ensure config is never None after convert() is called.
-#     Current: self.config can be None, causing type checker warnings.
-#     Consider using a state pattern or ensuring config is always set
-#     before operations that need it (validate in convert() entry point).
 
 
 class Converter:
@@ -104,6 +78,7 @@ class Converter:
         self,
         processor: JobProcessor,
         saver: SaverProtocol,
+        validator: Validator | None = None,
         worker: Worker | None = None,
         debug: bool = False,
     ) -> None:
@@ -112,6 +87,7 @@ class Converter:
         self.worker = worker
         self.config: Config | None = None
         self.debug = debug
+        self.validator = validator or Validator()
 
         self.events = EventEmitter()
         self.set_status(ConverterStatus.READY)
@@ -178,7 +154,8 @@ class Converter:
         Raises:
             ConverterError: If config is invalid or file path doesn't exist.
         """
-        self.validate_config()
+        self.validator.add(ConfigValidator(self.config))
+        self.validator.validate()
 
         job_id = self.send_job()
 
@@ -199,37 +176,6 @@ class Converter:
             Target object with prepared conversion parameters.
         """
         return self.processor.prepare_params(options)
-
-    # TODO(SRP-1): Move validate_config() to injected ConfigValidator class.
-    def validate_config(self) -> None:
-        """Validate that converter configuration is set and valid.
-
-        Raises:
-            ConverterError: If config is not set or invalid.
-        """
-        if not self.config or not self.config.get_config():
-            error_msg = "Converter`s config was not set"
-            raise ConverterError(error_msg)
-
-    # TODO(SRP-1): Move validate_path() to ConfigValidator class.
-    # TODO(DIP-2): Use injected FileSystem protocol instead of Path directly.
-    @staticmethod
-    def validate_path(path_to_file: str) -> bool:
-        """Validate that file path exists and is a file.
-
-        Args:
-            path_to_file: Path to the file to validate.
-
-        Returns:
-            True if path is valid.
-
-        Raises:
-            ConverterError: If path does not exist or is not a file.
-        """
-        if not Path(path_to_file).is_file():
-            msg = f"Invalid file path: {path_to_file}"
-            raise ConverterError(msg)
-        return True
 
     def get_file_path(self) -> str:
         """Get the source file path from configuration.
@@ -261,9 +207,11 @@ class Converter:
             ConverterError: If file path is invalid.
         """
         path_to_file = self.get_file_path()
-        self.validate_path(path_to_file)
-        options = self.get_job_options()
 
+        self.validator.add(FilePathValidator(path_to_file))
+        self.validator.validate()
+
+        options = self.get_job_options()
         job_id = self.processor.send_job(path_to_file, options)
 
         self.events.emit("message", f"Job ID: {job_id}")
@@ -289,7 +237,6 @@ class Converter:
 
         return self.processor.get_job_result(job_id)
 
-    # TODO(SRP-3): Extract to injectable ErrorHandler class.
     def error_handler(self, error: Exception) -> None:
         """Handle conversion errors.
 

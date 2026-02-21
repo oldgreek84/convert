@@ -95,16 +95,15 @@ class ConverterTestCase(unittest.TestCase):
         executor = self.converter.setup_converter_executor()
         self.assertTrue(callable(executor))
 
-    def test_validate_path_raises_error_for_invalid_path(self):
-        """Test that validate_path raises ConverterError for non-existent file."""
-        with self.assertRaises(ConverterError):
-            self.converter.validate_path("fake/path/to/file.fb2")
+    def test_get_status_returns_current_status(self):
+        """Test that get_status returns the current converter status."""
+        self.assertEqual(self.converter.get_status(), "ready")
 
-    def test_validate_path_returns_true_for_valid_path(self):
-        """Test that validate_path returns True for existing file."""
-        path_to_file = os.path.abspath(__file__)
-        res = self.converter.validate_path(path_to_file)
-        self.assertTrue(res)
+    def test_prepare_params_delegates_to_processor(self):
+        """Test that prepare_params delegates to processor."""
+        options = {"target": "mobi", "category": "ebook", "options": {}}
+        result = self.converter.prepare_params(options)
+        self.assertEqual(result, options)
 
     def test_get_file_path(self):
         """Test that get_file_path returns path from config."""

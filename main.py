@@ -28,8 +28,9 @@ from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
 from savers.local_saver import LocalFileSaver
 from src.application import AppPresenter
 from src.converter import Converter
+from src.validator import Validator
 
-# from uis.cli_ui import CLIView
+from uis.cli_ui import CLIView
 from uis.tk_ui import TkView
 from workers.worker import ThreadWorker
 
@@ -65,8 +66,8 @@ def main() -> None:
     - Interface startup
     """
     # Step 1: setup interface
-    # user_interface = CLIView()
-    user_interface = TkView()
+    user_interface = CLIView()
+    # user_interface = TkView()
 
     # Step 2: setup main processor
     processor = ProcessorOnDocker(TextRedirector(user_interface))
@@ -84,6 +85,7 @@ def main() -> None:
         processor=processor,
         saver=saver,
         worker=worker,
+        validator=Validator(),
         debug=debug)  # type: ignore[arg-type]
 
     # Step 5: run processing with presenter
