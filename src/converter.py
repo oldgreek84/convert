@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 from functools import partial
-from pathlib import Path, PosixPath
 from typing import TYPE_CHECKING
 
 from src.config import ConverterStatus
 from src.config import JobConfig as Config
-from src.validator import ConfigValidator, FilePathValidator, Validator
 from src.event_emitter import EventEmitter
 from src.exceptions import ConverterError, create_error_context
+from src.validator import ConfigValidator, FilePathValidator, Validator
 
 if TYPE_CHECKING:
     import io
     from collections.abc import Callable
+    from pathlib import Path, PosixPath
 
     from interfaces.processor_interface import JobProcessor
     from interfaces.saver_interface import SaverProtocol
     from interfaces.worker_interface import Worker
-    from src.config import Target
 
 
 # TODO(SRP-2): Extract status management to a separate StatusManager class.
@@ -25,8 +24,6 @@ if TYPE_CHECKING:
 # TODO(OCP-1): Make execution strategy injectable instead of hardcoded.
 
 # TODO(OCP-2): Make message formatting configurable/injectable.
-
-# TODO(LSP-1): Ensure config is never None after convert() is called.
 
 
 class Converter:
@@ -118,18 +115,10 @@ class Converter:
             config: Job configuration containing file path and conversion options.
         """
         self.set_status(ConverterStatus.PROCESSING)
-        self.set_config(config)
+        self.config = config
 
         run_process = self.setup_converter_executor()
         run_process()
-
-    def set_config(self, config: Config) -> None:
-        """Set converter configuration.
-
-        Args:
-            config: Job configuration to use for conversion.
-        """
-        self.config = config
 
     # TODO(OCP-1): Replace with injectable ExecutionStrategy.
     def setup_converter_executor(self) -> Callable:
@@ -157,44 +146,20 @@ class Converter:
         self.validator.add(ConfigValidator(self.config))
         self.validator.validate()
 
-        job_id = self.send_job()
+        assert self.config is not None  # noqa: S101
+
+        job_id = self._send_job()
 
         result_file_name, source_data = self.get_result(job_id)
 
-        if result_file_name:
-            self.save(result_file_name, source_data)
+        if not result_file_name:
+            raise ConverterError('There is not result.')
 
+        self.save(result_file_name, source_data)
         self.set_status(ConverterStatus.COMPLETED)
 
-    def prepare_params(self, options) -> Target:
-        """Prepare conversion parameters using processor.
-
-        Args:
-            options: Raw options dictionary to prepare.
-
-        Returns:
-            Target object with prepared conversion parameters.
-        """
-        return self.processor.prepare_params(options)
-
-    def get_file_path(self) -> str:
-        """Get the source file path from configuration.
-
-        Returns:
-            Path to the file to be converted.
-        """
-        return self.config.path_to_file
-
-    def get_job_options(self) -> dict:
-        """Get conversion options from configuration.
-
-        Returns:
-            Dictionary with conversion parameters.
-        """
-        return self.config.get_config()
-
     # TODO(OCP-2): Use injected MessageFormatter for "Job ID: {job_id}" message.
-    def send_job(self) -> int:
+    def _send_job(self) -> int:
         """Send conversion job to processor.
 
         Validates file path, prepares options, and sends job to processor.
@@ -206,12 +171,12 @@ class Converter:
         Raises:
             ConverterError: If file path is invalid.
         """
-        path_to_file = self.get_file_path()
+        path_to_file = self.config.path_to_file
 
         self.validator.add(FilePathValidator(path_to_file))
         self.validator.validate()
 
-        options = self.get_job_options()
+        options = self.config.get_config()
         job_id = self.processor.send_job(path_to_file, options)
 
         self.events.emit("message", f"Job ID: {job_id}")

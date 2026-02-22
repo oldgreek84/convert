@@ -51,13 +51,6 @@ class ConverterTestCase(unittest.TestCase):
         self.assertEqual(self.converter.saver, self.saver)
         self.assertIsNotNone(self.converter.events)
 
-    def test_set_config(self):
-        """Test that set_config stores the configuration."""
-        target = Target(target="mobi", category="ebook", options={})
-        config = JobConfig(target, "/path/to/file.fb2")
-        self.converter.set_config(config)
-        self.assertEqual(self.converter.config, config)
-
     def test_convert_calls_internal_convert(self):
         """Test that convert() calls _convert method."""
         target = Target(target="mobi", category="ebook", options={})
@@ -77,7 +70,7 @@ class ConverterTestCase(unittest.TestCase):
         """Test that _convert raises ConverterError for invalid file path."""
         target = Target(target="mobi", category="ebook", options={})
         config = JobConfig(target, "wrong/path/to/file")
-        self.converter.set_config(config)
+        self.converter.config = config
 
         with self.assertRaises(ConverterError) as ex:
             self.converter._convert()
@@ -99,37 +92,14 @@ class ConverterTestCase(unittest.TestCase):
         """Test that get_status returns the current converter status."""
         self.assertEqual(self.converter.get_status(), "ready")
 
-    def test_prepare_params_delegates_to_processor(self):
-        """Test that prepare_params delegates to processor."""
-        options = {"target": "mobi", "category": "ebook", "options": {}}
-        result = self.converter.prepare_params(options)
-        self.assertEqual(result, options)
-
-    def test_get_file_path(self):
-        """Test that get_file_path returns path from config."""
-        target = Target(target="mobi", category="ebook", options={})
-        config = JobConfig(target, "/path/to/file.fb2")
-        self.converter.set_config(config)
-        self.assertEqual(self.converter.get_file_path(), "/path/to/file.fb2")
-
-    def test_get_job_options(self):
-        """Test that get_job_options returns config options."""
-        target = Target(target="mobi", category="ebook", options={"quality": 90})
-        config = JobConfig(target, "/path/to/file.fb2")
-        self.converter.set_config(config)
-
-        options = self.converter.get_job_options()
-        self.assertIn("target", options)
-        self.assertIn("category", options)
-
     def test_send_job(self):
-        """Test that send_job sends job to processor."""
+        """Test that _send_job sends job to processor."""
         path_to_file = os.path.abspath(__file__)
         target = Target(target="mobi", category="ebook", options={})
         config = JobConfig(target, path_to_file)
-        self.converter.set_config(config)
+        self.converter.config = config
 
-        job_id = self.converter.send_job()
+        job_id = self.converter._send_job()
         self.assertEqual(job_id, "test_job_id")
 
     def test_error_handler_sets_failed_status(self):
@@ -153,7 +123,7 @@ class ConverterTestCase(unittest.TestCase):
         """Test that save method uses the saver properly."""
         target = Target(target="mobi", category="ebook", options={})
         config = JobConfig(target, "/path/to/file.fb2", path_to_save="/output")
-        self.converter.set_config(config)
+        self.converter.config = config
 
         source_data = io.BytesIO(b"test data")
         result = self.converter.save("result.mobi", source_data)

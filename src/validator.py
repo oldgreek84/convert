@@ -38,7 +38,7 @@ class ConfigValidator:
         self.config = config
 
     def validate(self) -> None:
-        if not self.config or not self.config.get_config():
+        if self.config is None or not self.config.get_config():
             error_msg = "Converter`s config was not set"
             raise ConverterError(error_msg)
 
