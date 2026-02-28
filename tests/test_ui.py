@@ -51,10 +51,10 @@ class TestCLIView(unittest.TestCase):
         mock_input.return_value = "1"
 
         with patch("utils.common_utils.parse_command", return_value={}):
-            target_object, file_path = self.cli._get_params(["test.py", "book.fb2"])
+            result = self.cli._get_params(["test.py", "book.fb2"])
 
-            self.assertEqual(file_path, "book.fb2")
-            self.assertIsInstance(target_object, Target)
+            self.assertEqual(result["path_to_file"], "book.fb2")
+            self.assertIsInstance(result["target"], Target)
 
             mock_format_service.get_source_format.assert_called()
             mock_format_service.list_available_targets.assert_called()

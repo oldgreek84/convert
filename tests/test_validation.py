@@ -7,14 +7,35 @@ filesystem access (no real files needed).
 from __future__ import annotations
 
 import unittest
+from unittest.mock import Mock
 
 from src.config import JobConfig, Target
-from src.exceptions import ConverterError
+from src.exceptions import ConverterError, FormatError
 from src.validator import (
     ConfigValidator,
+    ConversionDirectionValidator,
     FilePathValidator,
     Validator,
 )
+
+
+def _make_format(name: str) -> Mock:
+    """Create a mock Format object for testing."""
+    fmt = Mock()
+    fmt.name = name
+    return fmt
+
+
+def _make_config(**kwargs) -> JobConfig:
+    """Create a JobConfig with mock formats for testing."""
+    defaults = {
+        "fmt_from": _make_format("fb2"),
+        "fmt_to": _make_format("mobi"),
+        "target": Target(target="mobi", category="ebook", options={}),
+        "path_to_file": "/path/to/file.fb2",
+    }
+    defaults.update(kwargs)
+    return JobConfig(**defaults)
 
 
 class FakeFileChecker:
@@ -57,16 +78,41 @@ class ConfigValidatorTestCase(unittest.TestCase):
         Field-level validation (e.g. target must be non-empty) belongs in
         FormatService, not ConfigValidator.
         """
-        target = Target(target="", category="", options={})
-        config = JobConfig(target, "/path/to/file.fb2")
+        config = _make_config(target=Target(target="", category="", options={}))
         validator = ConfigValidator(config)
         validator.validate()  # should not raise — dict is truthy
 
     def test_passes_for_valid_config(self):
-        target = Target(target="mobi", category="ebook", options={})
-        config = JobConfig(target, "/path/to/file.fb2")
+        config = _make_config()
         validator = ConfigValidator(config)
         validator.validate()  # should not raise
+
+
+class ConversionDirectionValidatorTestCase(unittest.TestCase):
+    """Tests for ConversionDirectionValidator."""
+
+    def test_passes_for_valid_conversion(self):
+        format_service = Mock()
+        format_service.validate_conversion.return_value = True
+
+        validator = ConversionDirectionValidator(
+            fmt_from="fb2", fmt_to="mobi", format_service=format_service,
+        )
+        validator.validate()  # should not raise
+        format_service.validate_conversion.assert_called_once_with("fb2", "mobi")
+
+    def test_raises_for_invalid_conversion(self):
+        format_service = Mock()
+        format_service.validate_conversion.side_effect = FormatError(
+            "Conversion from 'fb2' to 'mp3' is not allowed"
+        )
+
+        validator = ConversionDirectionValidator(
+            fmt_from="fb2", fmt_to="mp3", format_service=format_service,
+        )
+        with self.assertRaises(FormatError) as ctx:
+            validator.validate()
+        self.assertIn("not allowed", str(ctx.exception))
 
 
 class CompositeValidatorTestCase(unittest.TestCase):
@@ -74,8 +120,7 @@ class CompositeValidatorTestCase(unittest.TestCase):
 
     def test_runs_all_validators_in_order(self):
         checker = FakeFileChecker({"/books/test.fb2"})
-        target = Target(target="mobi", category="ebook", options={})
-        config = JobConfig(target, "/books/test.fb2")
+        config = _make_config(path_to_file="/books/test.fb2")
 
         validator = Validator()
         validator.add(ConfigValidator(config))
@@ -93,8 +138,7 @@ class CompositeValidatorTestCase(unittest.TestCase):
         self.assertIn("config was not set", str(ctx.exception))
 
     def test_clears_validators_after_validate(self):
-        target = Target(target="mobi", category="ebook", options={})
-        config = JobConfig(target, "/path/to/file.fb2")
+        config = _make_config()
 
         validator = Validator()
         validator.add(ConfigValidator(config))

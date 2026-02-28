@@ -5,8 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock
 
-from src.config import ConverterStatus, JobConfig, SetupConfig, Target
-from src.exceptions import ConfigurationError
+from src.config import ConverterStatus, JobConfig, Target
 
 
 class TestConverterStatus(unittest.TestCase):
@@ -36,12 +35,27 @@ class TestTarget(unittest.TestCase):
         self.assertEqual(target.options, {"dpi": 150})
 
 
+def _make_format(name: str) -> Mock:
+    """Create a mock Format object for testing."""
+    fmt = Mock()
+    fmt.name = name
+    return fmt
+
+
 class TestJobConfig(unittest.TestCase):
     """Test cases for JobConfig dataclass."""
 
     def setUp(self):
+        self.fmt_from = _make_format("fb2")
+        self.fmt_to = _make_format("mobi")
         self.target = Target(target="mobi", category="ebook", options={"quality": 90})
-        self.config = JobConfig(self.target, "/path/to/file.fb2", path_to_save="/output")
+        self.config = JobConfig(
+            fmt_from=self.fmt_from,
+            fmt_to=self.fmt_to,
+            target=self.target,
+            path_to_file="/path/to/file.fb2",
+            path_to_save="/output",
+        )
 
     def test_properties(self):
         self.assertEqual(self.config.job_target, "mobi")
@@ -49,7 +63,12 @@ class TestJobConfig(unittest.TestCase):
         self.assertEqual(self.config.job_options, {"quality": 90})
 
     def test_default_path_to_save(self):
-        config = JobConfig(self.target, "/path/to/file.fb2")
+        config = JobConfig(
+            fmt_from=self.fmt_from,
+            fmt_to=self.fmt_to,
+            target=self.target,
+            path_to_file="/path/to/file.fb2",
+        )
         self.assertEqual(config.path_to_save, "books")
 
     def test_get_config(self):
@@ -60,31 +79,9 @@ class TestJobConfig(unittest.TestCase):
             "options": {"quality": 90},
         })
 
-
-class TestSetupConfig(unittest.TestCase):
-    """Test cases for SetupConfig."""
-
-    def test_check_direction_valid(self):
-        format_from = Mock()
-        format_from.name = "fb2"
-        format_to = Mock()
-        format_to.get_allowed_formats.return_value = ["fb2", "mobi"]
-
-        config = SetupConfig(format_from, format_to)
-        config.check_direction()  # should not raise
-
-    def test_check_direction_invalid(self):
-        format_from = Mock()
-        format_from.name = "fb2"
-        format_from.extension = ".fb2"
-        format_to = Mock()
-        format_to.get_allowed_formats.return_value = ["mobi", "pdf"]
-        format_to.extension = ".txt"
-
-        config = SetupConfig(format_from, format_to)
-        with self.assertRaises(ConfigurationError) as ctx:
-            config.check_direction()
-        self.assertIn("Wrong direction", str(ctx.exception))
+    def test_fmt_from_and_fmt_to(self):
+        self.assertEqual(self.config.fmt_from.name, "fb2")
+        self.assertEqual(self.config.fmt_to.name, "mobi")
 
 
 if __name__ == "__main__":

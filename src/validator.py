@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from formats.service import FormatService, get_format_service
 from src.exceptions import ConverterError
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ class ValidatorStep(Protocol):
 
 
 class DefaultFileChecker:
-    def is_file(self, file_path: str) -> bool:
+    def is_file(self, file_path: str) -> bool:  # noqa: PLR6301
         return Path(file_path).is_file()
 
 
@@ -41,6 +42,18 @@ class ConfigValidator:
         if self.config is None or not self.config.get_config():
             error_msg = "Converter`s config was not set"
             raise ConverterError(error_msg)
+
+
+class ConversionDirectionValidator:
+    def __init__(
+        self, fmt_from: str, fmt_to: str, format_service: FormatService | None = None
+    ) -> None:
+        self.format_service = format_service or get_format_service()
+        self.fmt_from = fmt_from
+        self.fmt_to = fmt_to
+
+    def validate(self) -> None:
+        self.format_service.validate_conversion(self.fmt_from, self.fmt_to)
 
 
 class Validator:

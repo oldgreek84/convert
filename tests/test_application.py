@@ -11,6 +11,13 @@ from src.converter import Converter
 from tests.common import DummyJobProcessor, DummySaver
 
 
+def _make_format(name: str) -> Mock:
+    """Create a mock Format object for testing."""
+    fmt = Mock()
+    fmt.name = name
+    return fmt
+
+
 class TestAppPresenter(unittest.TestCase):
     """Test cases for AppPresenter."""
 
@@ -20,8 +27,10 @@ class TestAppPresenter(unittest.TestCase):
         self.converter = Converter(processor=self.processor, saver=self.saver)
         self.view = Mock()
         self.view.get_config.return_value = JobConfig(
-            Target(target="mobi", category="ebook", options={}),
-            "/path/to/file.fb2",
+            fmt_from=_make_format("fb2"),
+            fmt_to=_make_format("mobi"),
+            target=Target(target="mobi", category="ebook", options={}),
+            path_to_file="/path/to/file.fb2",
         )
         self.presenter = AppPresenter(self.converter, self.view)
 

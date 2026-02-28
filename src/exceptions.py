@@ -49,33 +49,15 @@ from datetime import datetime
 
 
 class ConverterError(Exception):
-    """Base exception for all converter-related errors.
-
-    This is the root exception class for the e-book converter application.
-    All other custom exceptions inherit from this class, allowing for
-    comprehensive error handling at different levels of granularity.
-
-    Attributes:
-        message: Human-readable error description
-        error_code: Optional error code for programmatic handling
-        details: Optional dictionary with additional error context
-    """
+    """Base exception for all converter-related errors."""
 
     def __init__(self, message: str, error_code: str | None = None, details: dict | None = None):
-        """Initialize the converter error.
-
-        Args:
-            message: Human-readable error description
-            error_code: Optional error code for programmatic handling
-            details: Optional dictionary with additional error context
-        """
         super().__init__(message)
         self.message = message
         self.error_code = error_code
         self.details = details or {}
 
     def __str__(self) -> str:
-        """Return a string representation of the error."""
         if self.error_code:
             return f"[{self.error_code}] {self.message}"
         return self.message
@@ -304,14 +286,7 @@ class FormatValidationError(FormatError):
 
 
 def create_error_context(**kwargs) -> dict:
-    """Create an error context dictionary with common debugging information.
-
-    Args:
-        **kwargs: Additional context information to include
-
-    Returns:
-        Dictionary containing error context information
-    """
+    """Create an error context dictionary with common debugging information."""
     context = {
         "timestamp": datetime.now().isoformat(),
         "python_version": sys.version,
@@ -322,14 +297,7 @@ def create_error_context(**kwargs) -> dict:
 
 
 def handle_exception_chain(exception: Exception) -> list[str]:
-    """Extract the full exception chain for detailed error reporting.
-
-    Args:
-        exception: The exception to analyze
-
-    Returns:
-        List of exception messages in the chain
-    """
+    """Extract the full exception chain as a list of message strings."""
     messages = []
     current = exception
 

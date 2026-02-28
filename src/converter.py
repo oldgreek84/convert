@@ -7,7 +7,12 @@ from src.config import ConverterStatus
 from src.config import JobConfig as Config
 from src.event_emitter import EventEmitter
 from src.exceptions import ConverterError, create_error_context
-from src.validator import ConfigValidator, FilePathValidator, Validator
+from src.validator import (
+    ConfigValidator,
+    ConversionDirectionValidator,
+    FilePathValidator,
+    Validator,
+)
 
 if TYPE_CHECKING:
     import io
@@ -29,46 +34,10 @@ if TYPE_CHECKING:
 class Converter:
     """Business layer orchestrator for e-book conversion operations.
 
-    Part of Two-Layer Orchestration Pattern:
-    - AppPresenter: Presentation layer - coordinates View and Converter
-    - Converter: Business layer - coordinates Processor, Saver, Worker
-
-    Architecture:
-        ┌─────────────────────────────────────────────────────────┐
-        │                    AppPresenter                         │
-        │              (Presentation Layer Orchestrator)          │
-        ├─────────────────────────────────────────────────────────┤
-        │                      Converter                          │ <-- You are here
-        │               (Business Layer Orchestrator)             │
-        │         Coordinates: Processor -> Saver -> Worker       │
-        └─────────────────────────────────────────────────────────┘
-
-    The Converter has no UI knowledge. It emits events via EventEmitter
-    that the presentation layer (AppPresenter) subscribes to and forwards
-    to the View. This enables reuse across different UIs (CLI, GUI, API).
-
-    Conversion Workflow:
-        1. Validates configuration and file paths
-        2. Sends conversion jobs to processor
-        3. Monitors processing status (emits 'message' events)
-        4. Retrieves and saves conversion results
-        5. Emits 'status', 'error', 'result' events
-
-    Attributes:
-        processor: Handles actual file conversion (local, Docker, remote).
-        saver: Handles saving converted files (local filesystem, cloud).
-        worker: Optional async execution wrapper.
-        config: Current job configuration.
-        status: Current conversion status.
-        events: EventEmitter for decoupled notifications.
-
-    Example:
-        >>> converter = Converter(
-        ...     processor=LocalProcessor(),
-        ...     saver=LocalFileSaver()
-        ... )
-        >>> converter.events.on("status", print)
-        >>> converter.convert(job_config)
+    Coordinates Processor, Saver, and Worker to execute conversions.
+    Has no UI knowledge — emits events via EventEmitter that the
+    presentation layer (AppPresenter) subscribes to and forwards
+    to the View.
     """
 
     def __init__(
@@ -77,7 +46,7 @@ class Converter:
         saver: SaverProtocol,
         validator: Validator | None = None,
         worker: Worker | None = None,
-        debug: bool = False,
+        debug: bool = False,  # noqa: FBT001, FBT002
     ) -> None:
         self.processor = processor
         self.saver = saver
@@ -91,29 +60,16 @@ class Converter:
 
     # TODO(SRP-2): Move get_status() to StatusManager class.
     def get_status(self) -> str:
-        """Return current conversion status.
-
-        Returns:
-            Current status string from ConverterStatus enum.
-        """
         return self.status
 
     # TODO(SRP-2): Move set_status() to StatusManager class.
     def set_status(self, status: ConverterStatus) -> None:
-        """Set converter status and emit status event.
-
-        Args:
-            status: New status to set from ConverterStatus enum.
-        """
+        """Set converter status and emit status event."""
         self.status = status
         self.events.emit("status", self.status)
 
     def convert(self, config: Config) -> None:
-        """Run the conversion process for the given configuration.
-
-        Args:
-            config: Job configuration containing file path and conversion options.
-        """
+        """Run the conversion process for the given configuration."""
         self.set_status(ConverterStatus.PROCESSING)
         self.config = config
 
@@ -122,12 +78,7 @@ class Converter:
 
     # TODO(OCP-1): Replace with injectable ExecutionStrategy.
     def setup_converter_executor(self) -> Callable:
-        """Create and return the conversion executor.
-
-        Returns:
-            Callable that executes the conversion flow, optionally wrapped
-            with worker for async execution.
-        """
+        """Create the conversion executor, optionally wrapped with worker."""
         executor = self._convert
         if self.worker:
             executor = partial(self.worker.execute, self._convert)
@@ -135,42 +86,31 @@ class Converter:
         return executor
 
     def _convert(self) -> None:
-        """Execute the internal conversion workflow.
-
-        Validates config, sends job to processor, retrieves result,
-        and saves the converted file.
-
-        Raises:
-            ConverterError: If config is invalid or file path doesn't exist.
-        """
-        self.validator.add(ConfigValidator(self.config))
-        self.validator.validate()
-
+        """Execute the internal conversion workflow."""
         assert self.config is not None  # noqa: S101
+
+        self.validator.add(ConfigValidator(self.config))
+        self.validator.add(
+            ConversionDirectionValidator(
+                fmt_from=self.config.fmt_from.name,
+                fmt_to=self.config.fmt_to.name,
+            )
+        )
+        self.validator.validate()
 
         job_id = self._send_job()
 
         result_file_name, source_data = self.get_result(job_id)
 
         if not result_file_name:
-            raise ConverterError('There is not result.')
+            raise ConverterError("There is not result.")
 
         self.save(result_file_name, source_data)
         self.set_status(ConverterStatus.COMPLETED)
 
     # TODO(OCP-2): Use injected MessageFormatter for "Job ID: {job_id}" message.
     def _send_job(self) -> int:
-        """Send conversion job to processor.
-
-        Validates file path, prepares options, and sends job to processor.
-        Emits message event with job ID.
-
-        Returns:
-            Job ID from processor.
-
-        Raises:
-            ConverterError: If file path is invalid.
-        """
+        """Validate file path, send conversion job to processor, return job ID."""
         path_to_file = self.config.path_to_file
 
         self.validator.add(FilePathValidator(path_to_file))
@@ -185,17 +125,7 @@ class Converter:
 
     # TODO(OCP-2): Use injected MessageFormatter for "{message} [{status}]" format.
     def get_result(self, job_id: int) -> tuple[str, io.BytesIO]:
-        """Get conversion result from processor.
-
-        Polls processor for job status, emitting message events for each
-        status update, then retrieves the final result.
-
-        Args:
-            job_id: Job identifier returned from send_job().
-
-        Returns:
-            Tuple of (result filename, bytes data stream).
-        """
+        """Poll processor for job status, then retrieve the final result."""
         processor_info = self.processor.get_job_status(job_id)
         for message in processor_info:
             self.events.emit("message", f"{message} [{ConverterStatus.PROCESSING}]")
@@ -203,14 +133,7 @@ class Converter:
         return self.processor.get_job_result(job_id)
 
     def error_handler(self, error: Exception) -> None:
-        """Handle conversion errors.
-
-        Formats error message (with debug context if DEBUG=1), sets status
-        to FAILED, and emits error event.
-
-        Args:
-            error: Exception that occurred during conversion.
-        """
+        """Set status to FAILED and emit error event (with debug context if enabled)."""
         error_message = str(error)
         if self.debug:
             context = create_error_context(error=error)
@@ -220,18 +143,7 @@ class Converter:
         self.events.emit("error", f"Converter got an error: {error_message}")
 
     def save(self, source_name: str, source_data: io.BytesIO) -> str | Path | PosixPath:
-        """Save conversion result using configured saver.
-
-        Sets up the saver with source data and destination path from config,
-        then saves the file and emits result event.
-
-        Args:
-            source_name: Filename for the converted file.
-            source_data: Bytes stream containing the converted data.
-
-        Returns:
-            Path to the saved file.
-        """
+        """Save conversion result and emit result event."""
         self.saver.setup(
             source_name=source_name,
             source_data=source_data,

@@ -28,20 +28,6 @@ class EventEmitter:
     Allows registering callbacks for named events and emitting events
     with arbitrary arguments. Multiple listeners can be registered
     for the same event.
-
-    Attributes:
-        _listeners: Dictionary mapping event names to list of callbacks
-
-    Example:
-        >>> emitter = EventEmitter()
-        >>>
-        >>> # Register listeners
-        >>> emitter.on('message', print)
-        >>> emitter.on('message', logger.info)
-        >>>
-        >>> # Emit event - both listeners receive it
-        >>> emitter.emit('message', 'Hello')
-        Hello
     """
 
     def __init__(self) -> None:
@@ -49,50 +35,21 @@ class EventEmitter:
         self._listeners: dict[str, list[Callable]] = {}
 
     def on(self, event: str, callback: Callable) -> None:
-        """Register a callback for an event.
-
-        Multiple callbacks can be registered for the same event.
-        Callbacks are called in registration order.
-
-        Args:
-            event: Event name to listen for
-            callback: Function to call when event is emitted
-        """
+        """Register a callback for an event."""
         self._listeners.setdefault(event, []).append(callback)
 
     def off(self, event: str, callback: Callable) -> None:
-        """Remove a callback for an event.
-
-        Args:
-            event: Event name
-            callback: Callback to remove
-
-        Note:
-            If callback is not found in the event listeners, this may raise
-            ValueError from the underlying list.remove() call.
-        """
+        """Remove a callback for an event."""
         if event in self._listeners:
             self._listeners[event].remove(callback)
 
     def emit(self, event: str, *args) -> None:
-        """Emit an event with arguments.
-
-        Calls all registered callbacks for the event with provided args.
-        If no callbacks are registered, does nothing.
-
-        Args:
-            event: Event name to emit
-            *args: Arguments to pass to callbacks
-        """
+        """Emit an event, calling all registered callbacks with provided args."""
         for callback in self._listeners.get(event, []):
             callback(*args)
 
     def clear(self, event: str | None = None) -> None:
-        """Clear listeners for an event or all events.
-
-        Args:
-            event: Event name to clear, or None to clear all
-        """
+        """Clear listeners for a specific event, or all events if None."""
         if event is None:
             self._listeners.clear()
         elif event in self._listeners:

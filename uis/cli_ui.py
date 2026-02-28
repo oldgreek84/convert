@@ -39,30 +39,13 @@ from utils.common_utils import get_path, parse_command
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.config import JobConfig as Config
-
 
 class CLIView:
     """Command-line View implementing ViewProtocol.
 
-    This class provides a text-based passive view for the e-book converter.
-    It handles command-line argument parsing, user prompts, and text-based
-    status display. All business logic is delegated to the Application
-    via the convert callback.
-
-    The view follows the MVP pattern:
-    - Captures user input (file path, format selection)
-    - Displays output (status, messages, errors)
-    - Triggers conversion via registered callback
-
-    Attributes:
-        docstring: Help text for command-line usage
-        config: Current JobConfig after setup
-
-    Example:
-        >>> view = CLIView()
-        >>> view.set_on_convert(lambda: converter.convert(view.get_config()))
-        >>> view.run()
+    Handles argument parsing, interactive format selection, and
+    text-based status display. All business logic is delegated
+    to the Application via the convert callback.
     """
 
     docstring = DOCSTRING
@@ -72,11 +55,6 @@ class CLIView:
         self.config = None
 
     def _print(self, msg: str) -> None:
-        """Print message to stdout with proper handling.
-
-        Args:
-            msg: Message to print to the console
-        """
         if sys.__stdout__:
             sys.__stdout__.write(msg + "\n")
             sys.__stdout__.flush()
@@ -97,17 +75,16 @@ class CLIView:
             raise UIError("Config is not set up properly")
         return self.config
 
-    def setup(self) -> Config:
+    def setup(self) -> JobConfig:
         try:
-            args = self._get_params(sys.argv)
+            params = self._get_params(sys.argv)
+            return JobConfig(**params)
         except ParamsError as err:
             self.show_message(self.docstring)
             msg = f"There is not params to set ({err})"
             raise ParamsError(msg) from err
 
-        return JobConfig(*args)
-
-    def _get_params(self, args: list) -> tuple:
+    def _get_params(self, args: list) -> dict:
         if len(args) == 1:
             msg = f"Not enough params {args}"
             raise ParamsError(msg)
@@ -148,7 +125,6 @@ class CLIView:
 
         format_to_name = choices[result_enter].name
         format_to = format_service.get_target_format(format_to_name, **params_data)
-        format_service.validate_conversion(format_from_name, format_to_name)
 
         target_object = format_service.create_target_object(format_to.name, **params_data)
         working_target = target_object.target
@@ -161,7 +137,13 @@ class CLIView:
                 \n\t{target_object = }\
                 \n{'=' * 80}"
         self.show_message(msg)
-        return target_object, working_file_path
+
+        return {
+            "fmt_from": format_from,
+            "fmt_to": format_to,
+            "target": target_object,
+            "path_to_file": working_file_path,
+        }
 
     # =========================================================================
     # OUTPUT: Display information to user (ViewProtocol)
