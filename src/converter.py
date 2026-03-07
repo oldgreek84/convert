@@ -56,21 +56,21 @@ class Converter:
         self.validator = validator or Validator()
 
         self.events = EventEmitter()
-        self.set_status(ConverterStatus.READY)
+        self._set_status(ConverterStatus.READY)
 
-    # TODO(SRP-2): Move get_status() to StatusManager class.
-    def get_status(self) -> str:
-        return self.status
+    @property
+    def status(self) -> ConverterStatus:
+        return self._status
 
     # TODO(SRP-2): Move set_status() to StatusManager class.
-    def set_status(self, status: ConverterStatus) -> None:
+    def _set_status(self, status: ConverterStatus) -> None:
         """Set converter status and emit status event."""
-        self.status = status
+        self._status = status
         self.events.emit("status", self.status)
 
     def convert(self, config: Config) -> None:
         """Run the conversion process for the given configuration."""
-        self.set_status(ConverterStatus.PROCESSING)
+        self._set_status(ConverterStatus.PROCESSING)
         self.config = config
 
         run_process = self.setup_converter_executor()
@@ -106,7 +106,7 @@ class Converter:
             raise ConverterError("There is not result.")
 
         self.save(result_file_name, source_data)
-        self.set_status(ConverterStatus.COMPLETED)
+        self._set_status(ConverterStatus.COMPLETED)
 
     # TODO(OCP-2): Use injected MessageFormatter for "Job ID: {job_id}" message.
     def _send_job(self) -> int:
@@ -139,7 +139,7 @@ class Converter:
             context = create_error_context(error=error)
             error_message = f"{error} | Context: {context}"
 
-        self.set_status(ConverterStatus.FAILED)
+        self._set_status(ConverterStatus.FAILED)
         self.events.emit("error", f"Converter got an error: {error_message}")
 
     def save(self, source_name: str, source_data: io.BytesIO) -> str | Path | PosixPath:

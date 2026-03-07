@@ -10,7 +10,7 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-from src.config import JobConfig, Target
+from src.config import ConverterStatus, JobConfig, Target
 from src.converter import Converter
 from src.exceptions import ConverterError
 from tests.common import DummyJobProcessor, DummySaver, DummyWorker
@@ -104,9 +104,9 @@ class ConverterTestCase(unittest.TestCase):
         executor = self.converter.setup_converter_executor()
         self.assertTrue(callable(executor))
 
-    def test_get_status_returns_current_status(self):
-        """Test that get_status returns the current converter status."""
-        self.assertEqual(self.converter.get_status(), "ready")
+    def test_status_returns_current_status(self):
+        """Test that status property returns the current converter status."""
+        self.assertEqual(self.converter.status, ConverterStatus.READY)
 
     def test_send_job(self):
         """Test that _send_job sends job to processor."""
