@@ -11,8 +11,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 from src.config import ConverterStatus, JobConfig, Target
+from src.conversion_service import ConversionService
 from src.converter import Converter
 from src.exceptions import ConverterError
+from src.validator import Validator
 from tests.common import DummyJobProcessor, DummySaver, DummyWorker
 
 
@@ -40,6 +42,18 @@ class EventCollector:
         converter.events.on("result", self.results.append)
 
 
+def _make_converter(processor=None, saver=None, worker=None, debug=False):
+    """Helper to create a Converter with ConversionService."""
+    processor = processor or DummyJobProcessor()
+    saver = saver or DummySaver()
+    service = ConversionService(
+        processor=processor,
+        saver=saver,
+        validator=Validator(),
+    )
+    return Converter(service=service, worker=worker, debug=debug)
+
+
 class ConverterTestCase(unittest.TestCase):
     """Test cases for Converter class."""
 
@@ -47,7 +61,7 @@ class ConverterTestCase(unittest.TestCase):
         """Set up test fixtures with all required dependencies."""
         self.processor = DummyJobProcessor()
         self.saver = DummySaver()
-        self.converter = Converter(processor=self.processor, saver=self.saver)
+        self.converter = _make_converter(processor=self.processor, saver=self.saver)
         self.events = EventCollector()
         self.events.subscribe(self.converter)
 
@@ -64,8 +78,7 @@ class ConverterTestCase(unittest.TestCase):
     def test_init_creates_converter(self):
         """Test that __init__ creates converter with all dependencies."""
         self.assertIsNotNone(self.converter)
-        self.assertEqual(self.converter.processor, self.processor)
-        self.assertEqual(self.converter.saver, self.saver)
+        self.assertIsNotNone(self.converter.service)
         self.assertIsNotNone(self.converter.events)
 
     def test_convert_calls_internal_convert(self):
@@ -76,10 +89,14 @@ class ConverterTestCase(unittest.TestCase):
             self.converter.convert(config)
             mocked.assert_called_once()
 
-    def test_convert_without_config_raises_error(self):
-        """Test that _convert raises AssertionError when config is not set."""
-        with self.assertRaises(AssertionError):
-            self.converter._convert()
+    def test_convert_sets_processing_status(self):
+        """Test that convert() sets status to PROCESSING."""
+        config = self._make_config()
+
+        with patch.object(self.converter, "_convert"):
+            self.converter.convert(config)
+
+        self.assertIn(ConverterStatus.PROCESSING, self.events.statuses)
 
     @patch("src.validator.get_format_service")
     def test_convert_with_wrong_file_path_raises_error(self, mock_get_fs):
@@ -108,15 +125,6 @@ class ConverterTestCase(unittest.TestCase):
         """Test that status property returns the current converter status."""
         self.assertEqual(self.converter.status, ConverterStatus.READY)
 
-    def test_send_job(self):
-        """Test that _send_job sends job to processor."""
-        path_to_file = os.path.abspath(__file__)
-        config = self._make_config(path_to_file=path_to_file)
-        self.converter.config = config
-
-        job_id = self.converter._send_job()
-        self.assertEqual(job_id, "test_job_id")
-
     def test_error_handler_sets_failed_status(self):
         """Test that error_handler sets status to FAILED and emits error event."""
         self.converter.error_handler(Exception("test error"))
@@ -126,24 +134,15 @@ class ConverterTestCase(unittest.TestCase):
 
     def test_error_handler_debug_mode(self):
         """Test that error_handler includes context when debug=True."""
-        converter = Converter(processor=self.processor, saver=self.saver, debug=True)
+        converter = _make_converter(
+            processor=self.processor, saver=self.saver, debug=True
+        )
         events = EventCollector()
         events.subscribe(converter)
         converter.error_handler(Exception("test error"))
 
         self.assertTrue(any("failed" in str(s) for s in events.statuses))
         self.assertTrue(any("Context:" in str(e) for e in events.errors))
-
-    def test_save_uses_saver(self):
-        """Test that save method uses the saver properly."""
-        config = self._make_config(path_to_save="/output")
-        self.converter.config = config
-
-        source_data = io.BytesIO(b"test data")
-        result = self.converter.save("result.mobi", source_data)
-
-        self.assertIn("result.mobi", str(result))
-        self.assertEqual(self.saver.source_name, "result.mobi")
 
     @patch("src.validator.get_format_service")
     def test_full_conversion_flow(self, mock_get_fs):
@@ -152,11 +151,12 @@ class ConverterTestCase(unittest.TestCase):
         path_to_file = os.path.abspath(__file__)
         config = self._make_config(path_to_file=path_to_file, path_to_save="/output")
 
+        service = self.converter.service
         with (
-            patch.object(self.converter.processor, "send_job", return_value="job123"),
-            patch.object(self.converter.processor, "get_job_status", return_value=["Processing"]),
+            patch.object(service.processor, "send_job", return_value="job123"),
+            patch.object(service.processor, "get_job_status", return_value=["Processing"]),
             patch.object(
-                self.converter.processor,
+                service.processor,
                 "get_job_result",
                 return_value=("result.mobi", io.BytesIO(b"data")),
             ),
@@ -164,6 +164,29 @@ class ConverterTestCase(unittest.TestCase):
             self.converter.convert(config)
 
         self.assertTrue(any("completed" in str(s) for s in self.events.statuses))
+        self.assertTrue(len(self.events.results) > 0)
+
+    @patch("src.validator.get_format_service")
+    def test_full_conversion_emits_messages(self, mock_get_fs):
+        """Test that conversion emits message events for job ID and status."""
+        mock_get_fs.return_value.validate_conversion.return_value = True
+        path_to_file = os.path.abspath(__file__)
+        config = self._make_config(path_to_file=path_to_file, path_to_save="/output")
+
+        service = self.converter.service
+        with (
+            patch.object(service.processor, "send_job", return_value="job123"),
+            patch.object(service.processor, "get_job_status", return_value=["Processing"]),
+            patch.object(
+                service.processor,
+                "get_job_result",
+                return_value=("result.mobi", io.BytesIO(b"data")),
+            ),
+        ):
+            self.converter.convert(config)
+
+        self.assertTrue(any("Job ID" in str(m) for m in self.events.messages))
+        self.assertTrue(any("Processing" in str(m) for m in self.events.messages))
 
 
 if __name__ == "__main__":

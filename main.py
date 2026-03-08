@@ -27,6 +27,7 @@ import formats
 from processors.processor_on_docker import ProcessorOnDocker, TextRedirector
 from savers.local_saver import LocalFileSaver
 from src.application import AppPresenter
+from src.conversion_service import ConversionService
 from src.converter import Converter
 from src.validator import Validator
 
@@ -67,7 +68,7 @@ def main() -> None:
     """
     # Step 1: setup interface
     user_interface = CLIView()
-    # user_interface = TkView()
+    user_interface = TkView()
 
     # Step 2: setup main processor
     processor = ProcessorOnDocker(TextRedirector(user_interface))
@@ -78,15 +79,15 @@ def main() -> None:
     # saver = GoogleDriveSaver()
 
     # Step 4: setup Converter with required params and non-blocking worker
-    debug = os.getenv('DEBUG') == "1"
+    debug = os.getenv("DEBUG") == "1"
 
     worker = ThreadWorker()
-    converter = Converter(
+    service = ConversionService(
         processor=processor,
         saver=saver,
-        worker=worker,
         validator=Validator(),
-        debug=debug)  # type: ignore[arg-type]
+    )
+    converter = Converter(service=service, worker=worker, debug=debug)
 
     # Step 5: run processing with presenter
     presenter = AppPresenter(converter, user_interface)

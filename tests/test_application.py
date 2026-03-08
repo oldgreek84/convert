@@ -7,7 +7,9 @@ from unittest.mock import Mock, call
 
 from src.application import AppPresenter, Application
 from src.config import JobConfig, Target
+from src.conversion_service import ConversionService
 from src.converter import Converter
+from src.validator import Validator
 from tests.common import DummyJobProcessor, DummySaver
 
 
@@ -24,7 +26,12 @@ class TestAppPresenter(unittest.TestCase):
     def setUp(self):
         self.processor = DummyJobProcessor()
         self.saver = DummySaver()
-        self.converter = Converter(processor=self.processor, saver=self.saver)
+        service = ConversionService(
+            processor=self.processor,
+            saver=self.saver,
+            validator=Validator(),
+        )
+        self.converter = Converter(service=service)
         self.view = Mock()
         self.view.get_config.return_value = JobConfig(
             fmt_from=_make_format("fb2"),
