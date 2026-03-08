@@ -27,6 +27,19 @@ class ConverterStatus(StrEnum):
     COMPLETED = "completed"
 
 
+@dataclass(frozen=True)
+class ViewSelections:
+    """Raw user selections from the view layer.
+
+    Contains only primitive types — no domain objects.
+    The presenter translates this into a JobConfig.
+    """
+
+    source_format: str
+    target_format: str
+    path_to_file: str
+
+
 @dataclass
 class Target:
     """Defines the conversion target format and options."""

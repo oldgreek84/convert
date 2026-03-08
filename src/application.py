@@ -29,6 +29,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from formats.service import get_format_service
+from src.config import JobConfig, ViewSelections
+
 if TYPE_CHECKING:
     from interfaces.view_interface import PresenterViewProtocol
     from src.converter import Converter
@@ -109,10 +112,27 @@ class AppPresenter:
     def _handle_convert(self) -> None:
         """Handle conversion request from View.
 
-        Callback invoked when user triggers conversion (button click,
-        CLI confirm). Retrieves config from View and delegates to Converter.
+        Retrieves selections from View, builds JobConfig, and delegates
+        to Converter.
         """
-        self.converter.convert(self.view.get_config())
+        try:
+            selections = self.view.get_config()
+            config = self._build_config(selections)
+        except Exception as ex:
+            self.converter.error_handler(ex)
+            return
+
+        self.converter.convert(config)
+
+    def _build_config(self, selections: ViewSelections) -> JobConfig:
+        """Build JobConfig from raw view selections using FormatService."""
+        format_service = get_format_service()
+        return JobConfig(
+            fmt_from=format_service.get_source_format(selections.source_format),
+            fmt_to=format_service.get_target_format(selections.target_format),
+            target=format_service.create_target_object(selections.target_format),
+            path_to_file=selections.path_to_file,
+        )
 
 
 # Backward compatibility alias

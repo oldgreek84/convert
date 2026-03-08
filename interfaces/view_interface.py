@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from src.config import JobConfig
+from src.config import ViewSelections
 
 
 @runtime_checkable
@@ -117,14 +117,13 @@ class AppViewProtocol(Protocol):
         """
         ...
 
-    def get_config(self) -> JobConfig:
-        """Get the current job configuration.
+    def get_config(self) -> ViewSelections:
+        """Get raw user selections for conversion.
 
-        Returns the JobConfig object built from user input. This is called
-        by the Application when the user triggers conversion.
+        Returns primitive data only — the presenter builds domain objects.
 
         Returns:
-            JobConfig object with target format and file path
+            ViewSelections with source format, target format, and file path
         """
         ...
 

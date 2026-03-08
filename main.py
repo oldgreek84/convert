@@ -68,7 +68,7 @@ def main() -> None:
     """
     # Step 1: setup interface
     user_interface = CLIView()
-    user_interface = TkView()
+    # user_interface = TkView()
 
     # Step 2: setup main processor
     processor = ProcessorOnDocker(TextRedirector(user_interface))

@@ -3,21 +3,14 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock, call
+from unittest.mock import Mock, patch
 
 from src.application import AppPresenter, Application
-from src.config import JobConfig, Target
+from src.config import ViewSelections
 from src.conversion_service import ConversionService
 from src.converter import Converter
 from src.validator import Validator
 from tests.common import DummyJobProcessor, DummySaver
-
-
-def _make_format(name: str) -> Mock:
-    """Create a mock Format object for testing."""
-    fmt = Mock()
-    fmt.name = name
-    return fmt
 
 
 class TestAppPresenter(unittest.TestCase):
@@ -33,10 +26,9 @@ class TestAppPresenter(unittest.TestCase):
         )
         self.converter = Converter(service=service)
         self.view = Mock()
-        self.view.get_config.return_value = JobConfig(
-            fmt_from=_make_format("fb2"),
-            fmt_to=_make_format("mobi"),
-            target=Target(target="mobi", category="ebook", options={}),
+        self.view.get_config.return_value = ViewSelections(
+            source_format="fb2",
+            target_format="mobi",
             path_to_file="/path/to/file.fb2",
         )
         self.presenter = AppPresenter(self.converter, self.view)
@@ -52,7 +44,6 @@ class TestAppPresenter(unittest.TestCase):
 
     def test_init_subscribes_to_converter_events(self):
         """Verify that converter events are wired to view methods."""
-        # Emit events and check that view methods are called
         self.converter.events.emit("status", "processing")
         self.converter.events.emit("message", "hello")
         self.converter.events.emit("error", "oops")
@@ -67,14 +58,34 @@ class TestAppPresenter(unittest.TestCase):
         self.presenter.run()
         self.view.run.assert_called_once()
 
-    def test_handle_convert_gets_config_and_calls_converter(self):
+    @patch("src.application.get_format_service")
+    def test_handle_convert_builds_config_and_calls_converter(self, mock_get_fs):
         """Simulate the view triggering conversion."""
-        # Get the callback that was registered with set_on_convert
+        mock_fs = mock_get_fs.return_value
+        mock_fs.get_source_format.return_value = Mock(name="fb2")
+        mock_fs.get_target_format.return_value = Mock(name="mobi")
+        mock_fs.create_target_object.return_value = Mock()
+
         callback = self.view.set_on_convert.call_args[0][0]
 
-        with unittest.mock.patch.object(self.converter, "convert") as mock_convert:
+        with patch.object(self.converter, "convert") as mock_convert:
             callback()
-            mock_convert.assert_called_once_with(self.view.get_config())
+            mock_convert.assert_called_once()
+
+        mock_fs.get_source_format.assert_called_with("fb2")
+        mock_fs.get_target_format.assert_called_with("mobi")
+        mock_fs.create_target_object.assert_called_with("mobi")
+
+    @patch("src.application.get_format_service")
+    def test_handle_convert_error_calls_error_handler(self, mock_get_fs):
+        """Test that errors in get_config are routed to error_handler."""
+        self.view.get_config.side_effect = ValueError("bad input")
+
+        callback = self.view.set_on_convert.call_args[0][0]
+
+        with patch.object(self.converter, "error_handler") as mock_handler:
+            callback()
+            mock_handler.assert_called_once()
 
     def test_backward_compatibility_alias(self):
         self.assertIs(Application, AppPresenter)

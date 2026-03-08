@@ -74,5 +74,5 @@ class Converter:
             context = create_error_context(error=error)
             error_message = f"{error} | Context: {context}"
 
-        self.events.emit("error", f"Converter got an error: {error_message}")
         self._set_status(ConverterStatus.FAILED)
+        self.events.emit("error", f"Converter got an error: {error_message}")

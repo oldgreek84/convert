@@ -45,9 +45,10 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 import ttkbootstrap as ttkb
 from ttkbootstrap.dialogs import Messagebox
 
-from src.config import JobConfig as Config
-from src.config import Target
+import formats
+from src.config import ViewSelections
 from uis.settings import get_font_size, set_font_size
+from formats.service import get_format_service
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,14 +88,6 @@ def tk_thread_safe[**P, T](func: Callable[P, T]) -> Callable[P, None]:
     return wrapper
 
 
-CONVERTER_FORMATS_MAPPING = {
-    "pdf": ["mobi"],
-    "mobi": ["fb2", "txt", "epub"],
-    "fb2": ["mobi", "txt", "epub"],
-    "ebook": ["mobi", "fb2", "epub", "txt"],
-}
-
-# TODO: make Tk View use format domain for choose available formats
 class TkView:
     """Passive View implementing ViewProtocol with ttkbootstrap styling.
 
@@ -134,10 +127,11 @@ class TkView:
         self.root.rowconfigure(4, weight=1)  # Message area row expands
 
         self._on_convert: Callable[[], None] | None = None
+        self._format_service = get_format_service()
+        self._source_formats = [m.name for m in formats.registry.get_all()]
         self._create_widgets()
-        self.config = None
 
-    def _get_font(self, bold: bool = False, scale: float = 1.0) -> tuple[str, int, str]:
+    def _get_font(self, bold: bool = False, scale: float = 1.0) -> tuple[str, int, str]:  # noqa: FBT001, FBT002
         """Get font tuple with current size.
 
         Uses 'DejaVu Sans' which is available on most Linux systems
@@ -234,7 +228,7 @@ class TkView:
         self.selection_from = ttkb.Combobox(
             format_frame,
             bootstyle="info",  # type: ignore[call-arg]
-            values=["fb2", "txt", "epub", "pdf", "mobi"],
+            values=self._source_formats,
             width=14,
         )
         self.selection_from.configure(font=self._get_font())
@@ -255,10 +249,11 @@ class TkView:
         to_label.grid(row=0, column=3, padx=(0, 8))
         self._register_widget(to_label)
 
+        initial_targets = self._get_target_names(self._source_formats[0]) if self._source_formats else []
         self.selection_to = ttkb.Combobox(
             format_frame,
             bootstyle="info",  # type: ignore[call-arg]
-            values=["mobi", "pdf", "epub", "fb2"],
+            values=initial_targets,
             width=14,
         )
         self.selection_to.configure(font=self._get_font())
@@ -422,10 +417,15 @@ class TkView:
         self.font_size_info.pack(side=tk.LEFT, padx=(15, 10), pady=10)
         self._register_widget(self.font_size_info)
 
+    def _get_target_names(self, source_name: str) -> list[str]:
+        """Get available target format names for a source format."""
+        targets = self._format_service.get_available_targets_by_name(source_name)
+        return [t.name for t in targets]
+
     def _on_source_format_change(self, event) -> None:  # noqa: ARG002
         """Update target format options when source format changes."""
         current = self.selection_from.get()
-        targets = CONVERTER_FORMATS_MAPPING.get(current, ["mobi"])
+        targets = self._get_target_names(current)
         self.selection_to.config(values=targets)
         if targets:
             self.selection_to.set(targets[0])
@@ -469,7 +469,7 @@ class TkView:
             self.file_entry.insert(0, filename)
             # Auto-detect source format from file
             ext = Path(filename).suffix.lstrip(".")
-            if ext in ["fb2", "txt", "epub", "pdf", "mobi"]:
+            if ext in self._source_formats:
                 self.selection_from.set(ext)
                 self._on_source_format_change(None)
 
@@ -584,15 +584,13 @@ class TkView:
     # EVENTS: Callbacks for user actions (ViewProtocol)
     # =========================================================================
 
-    def get_config(self) -> Config:
-        args = self._get_params()
-        self.config = Config(*args)
-        return self.config
-
-    def _get_params(self) -> tuple[Target, Any]:
-        target_object = Target(self._get_target_format(), "ebook")
-        path_to_file = self._get_file_path()
-        return target_object, path_to_file
+    def get_config(self) -> ViewSelections:
+        """Return raw user selections for the presenter to build Config."""
+        return ViewSelections(
+            source_format=self.selection_from.get(),
+            target_format=self._get_target_format(),
+            path_to_file=self._get_file_path(),
+        )
 
     def set_on_convert(self, callback: Callable[[], None]) -> None:
         """Register callback for convert button."""

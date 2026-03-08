@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from formats.service import get_format_service
-from src.config import JobConfig
+from src.config import ViewSelections
 from src.exceptions import ParamsError, UIError
 from uis import DOCSTRING
 from utils.common_utils import get_path, parse_command
@@ -52,9 +52,9 @@ class CLIView:
 
     def __init__(self):
         self._on_convert = None
-        self.config = None
+        self._selections: ViewSelections | None = None
 
-    def _print(self, msg: str) -> None:
+    def _print(self, msg: str) -> None:  # noqa: PLR6301
         if sys.__stdout__:
             sys.__stdout__.write(msg + "\n")
             sys.__stdout__.flush()
@@ -63,28 +63,27 @@ class CLIView:
         self._on_convert = callback
 
     def run(self) -> None:
-        config = self.setup()
-        self.config = config
+        self._selections = self._setup()
 
         # Confirm
         if input("Convert? [y/N]: ").lower() == "y" and self._on_convert:
             self._on_convert()
 
-    def get_config(self):
-        if not self.config:
-            raise UIError("Config is not set up properly")
-        return self.config
+    def get_config(self) -> ViewSelections:
+        if not self._selections:
+            msg = "Config is not set up properly"
+            raise UIError(msg)
+        return self._selections
 
-    def setup(self) -> JobConfig:
+    def _setup(self) -> ViewSelections:
         try:
-            params = self._get_params(sys.argv)
-            return JobConfig(**params)
+            return self._get_selections(sys.argv)
         except ParamsError as err:
             self.show_message(self.docstring)
             msg = f"There is not params to set ({err})"
             raise ParamsError(msg) from err
 
-    def _get_params(self, args: list) -> dict:
+    def _get_selections(self, args: list) -> ViewSelections:
         if len(args) == 1:
             msg = f"Not enough params {args}"
             raise ParamsError(msg)
@@ -97,13 +96,14 @@ class CLIView:
         else:
             working_file_path = sys.argv[1]
 
-        format_from_name = Path(working_file_path).suffix.lstrip(".")
+        source_format = Path(working_file_path).suffix.lstrip(".")
         format_service = get_format_service()
-        format_from = format_service.get_source_format(format_from_name)
+        format_from = format_service.get_source_format(source_format)
 
         available_targets = format_service.list_available_targets(format_from)
         if not available_targets:
-            raise ParamsError(f"No conversion targets available for {format_from_name}")
+            msg = f"No conversion targets available for {source_format}"
+            raise ParamsError(msg)
 
         choices = {}
         self.show_message("Available conversion formats:")
@@ -122,28 +122,21 @@ class CLIView:
 
         chosen_metadata = choices[result_enter]
         self.show_message(f"Selected: {chosen_metadata.display_name}")
+        target_format = chosen_metadata.name
 
-        format_to_name = choices[result_enter].name
-        format_to = format_service.get_target_format(format_to_name, **params_data)
+        self.show_message(
+            f"\n{'=' * 80}\nPARAMS:\
+            \n\t{working_file_path = }\
+            \n\t{source_format = }\
+            \n\t{target_format = }\
+            \n{'=' * 80}"
+        )
 
-        target_object = format_service.create_target_object(format_to.name, **params_data)
-        working_target = target_object.target
-        working_category = target_object.category
-
-        msg = f"\n{'=' * 80}\nPARAMS:\
-                \n\t{working_file_path = }\
-                \n\t{working_target = }\
-                \n\t{working_category = }\
-                \n\t{target_object = }\
-                \n{'=' * 80}"
-        self.show_message(msg)
-
-        return {
-            "fmt_from": format_from,
-            "fmt_to": format_to,
-            "target": target_object,
-            "path_to_file": working_file_path,
-        }
+        return ViewSelections(
+            source_format=source_format,
+            target_format=target_format,
+            path_to_file=working_file_path,
+        )
 
     # =========================================================================
     # OUTPUT: Display information to user (ViewProtocol)
